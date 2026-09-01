@@ -39,11 +39,10 @@ docker run --rm -v n8n_data:/data -v $(pwd):/backup alpine tar xzf /backup/n8n_b
 
 ## Edycja workflow przez n8n-mcp
 
-Workflow edytuje się na żywo w działającej instancji przez `mcp__n8n-mcp__update_workflow`, nie przez pliki w tym repo. Dwa nieoczywiste zachowania wyłapane w tej sesji:
-
-- **Prawdziwe pole `Notes` node'a (zakładka Settings w UI n8n) to właściwość node'a na najwyższym poziomie (`node.notes`, siostrzana do `type`/`position`/`parameters`), nieosiągalna na istniejącym nodzie.** `setNodeParameter` i `updateNodeParameters` zawsze piszą wewnątrz `node.parameters`, niezależnie od podanej ścieżki JSON Pointer — `path: "/notes"` po cichu tworzy fałszywe pole `parameters.notes` zamiast ustawić prawdziwe. Jedyna operacja, której schemat udostępnia pole `notes` na najwyższym poziomie, to `addNode`. Żeby ustawić/zmienić Notes na istniejącym nodzie, trzeba `removeNode`, a potem dodać go z powrotem `addNode`-em (te same `id`, `type`, `typeVersion`, `parameters`, `position`) z `notes` w obiekcie node'a.
-- **`removeNode` usuwa wszystkie połączenia (connections) danego node'a, zarówno jako źródła, jak i celu.** Po remove+re-add trzeba ręcznie odtworzyć jego connections przez `addConnection` (source, target, connectionType, indeksy) — nie są zachowywane automatycznie.
+Workflow edytuje się na żywo w działającej instancji przez `mcp__n8n-mcp__update_workflow`, nie przez pliki w tym repo.
 
 Konwencja nazewnictwa workflow w tej instancji: `NNN — Opis po polsku (stack/szczegóły w nawiasie)`, trzycyfrowy rosnący numer z zerami wiodącymi i myślnikiem em dash. Przed nazwaniem nowego workflow sprawdź `search_workflows` (posortowane po nazwie lub updatedAt) pod kątem aktualnie najwyższego numeru.
 
 Zgodnie z instrukcjami samego serwera n8n-mcp: przed pisaniem kodu SDK workflow wywołaj `get_sdk_reference`, a dla każdej istotnej techniki `get_workflow_best_practices`.
+
+Dokumentowanie węzłów (prawdziwe pole `Notes` per node, domyślny model OpenRouter, sticky note z podsumowaniem workflow) ma dedykowany skill: `.claude/skills/n8n/` (wywołanie: `/n8n`). Wywoływany tylko ręcznie przez użytkownika — samo słowo "n8n" w wiadomości NIE jest wywołaniem, nie uruchamiaj go samodzielnie/proaktywnie. Mechanika `removeNode`+`addNode` do ustawiania `node.notes` jest opisana w tym skillu, nie tutaj.
