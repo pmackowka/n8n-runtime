@@ -6,11 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Scaffold Docker Compose dla lokalnej instancji **n8n** — to nie jest kodowa aplikacja. Nie ma tu build/lint/testów; jedynym "kodem" są `docker-compose.yml` i `.env`. Instancja to pojedynczy kontener n8n z wbudowaną bazą SQLite (bez Postgresa, bez trybu queue/workerów) — cały stan (workflow, credentiale, ustawienia) siedzi w wolumenie `n8n_data`. Same workflow (nody, połączenia, credentiale) żyją wewnątrz działającej instancji, nie jako pliki w tym repo — edytuj je na żywo przez narzędzia `mcp__n8n-mcp__*` (serwer MCP n8n-mcp), nie ręcznie w plikach tutaj.
 
-Pełna procedura instalacji/backupu/migracji (nowy Mac, zmienne środowiskowe, disaster recovery) jest w osobnym repo: `Knowledge-Base/wiki/Software/n8n/n8n-001-Instalacja-Lokalnie-Docker-Compose-Mac.md`. Ten CLAUDE.md obejmuje tylko codzienne komendy i pułapki.
+Ten sam katalog roboczy służy też do nauki agentów głosowych ElevenLabs (przez serwer MCP `elevenlabs`) w ramach osobnego kursu — analogicznie do n8n, cały stan (agenci, workflow, knowledge base) żyje w usłudze zewnętrznej, nie jako pliki tutaj.
+
+Pełna procedura instalacji/backupu/migracji n8n (nowy Mac, zmienne środowiskowe, disaster recovery) jest w osobnym repo: `Knowledge-Base/wiki/Software/n8n/n8n-001-Instalacja-Lokalnie-Docker-Compose-Mac.md`. Ten CLAUDE.md obejmuje tylko codzienne komendy i pułapki.
 
 ## Styl dokumentacji
 
 Cokolwiek piszesz w tym repo — Sticky Notes, pole `Notes` node'a, ten plik CLAUDE.md — opisuj wyłącznie bieżący, konkretny stan/konfigurację. Zero narracji historycznej ("wcześniej było X, potem zmieniliśmy na Y", "ta nazwa była zajęta, więc..."). Czytelnik z przyszłości ma dostać fakt, nie dziennik zdarzeń.
+
+## Skille
+
+Zadania specyficzne dla poszczególnych narzędzi mają dedykowane skille — wywoływane **wyłącznie ręcznie przez użytkownika**, nigdy proaktywnie (samo słowo "n8n"/"ElevenLabs"/"11labs" w wiadomości NIE jest wywołaniem):
+
+- `.claude/skills/n8n/` (`/n8n`) — dopisuje dokumentację do istniejącego workflow: prawdziwe pole `Notes` per node, sticky note z podsumowaniem.
+- `.claude/skills/11labs/` (`/11labs`) — wykonuje kolejne zadanie z kursu ElevenLabs (budowa/edycja agenta i Agent Workflow) na podstawie wklejonej przez użytkownika treści lekcji.
+
+Fundamentalne zasady i pułapki obu narzędzi (sekcje `## n8n` i `## ElevenLabs` niżej) obowiązują zawsze, niezależnie od tego, czy dany skill został wywołany — bo dotyczą każdej edycji przez odpowiedni MCP, nie tylko pracy w ramach skilla.
 
 ## Komendy
 
@@ -43,7 +54,7 @@ docker run --rm -v n8n_data:/data -v $(pwd):/backup alpine tar xzf /backup/n8n_b
 - **Trigery webhookowe z zewnętrznych usług (Telegram Trigger, Slack Trigger i podobne) wymagają publicznego adresu HTTPS** — Telegram i Slack weryfikują to przy rejestracji webhooka i odrzucają rejestrację bez niego. Ta instancja (`localhost:5678`, bez TLS) tego nie spełnia — taki workflow nie da się aktywować bez tunelu (np. ngrok) i zmiennej `WEBHOOK_URL`. Wbudowany Chat Trigger n8n tego problemu nie ma, bo przeglądarka łączy się z n8n bezpośrednio, bez pośrednika.
 - **Konto n8n na tej instancji jest zarejestrowane na „Krzysztof Strand" / `codecollabsql@gmail.com`** (widoczne np. jako nazwa jedynego projektu w `search_projects`, albo jako `targetProject` przy tworzeniu workflow). To adres i dane właściciela tego repo — jego alternatywny e-mail, używany do newsletterów, reklam i testowanych narzędzi. Nie jest to cudze konto ani błąd konfiguracji instancji.
 
-## Edycja workflow przez n8n-mcp
+## n8n — edycja workflow przez n8n-mcp
 
 Workflow edytuje się na żywo w działającej instancji przez `mcp__n8n-mcp__update_workflow`, nie przez pliki w tym repo.
 
@@ -62,4 +73,25 @@ Kilka nieoczywistych zachowań `update_workflow` wyłapanych w praktyce:
 - **Triggery z zewnętrznych platform czatu (Telegram, Slack) nie mają natywnego `chatInput`** jak wbudowany Chat Trigger — pole promptu AI Agenta trzeba ręcznie przełączyć na `promptType: 'define'` i wyciągnąć właściwe dane wyrażeniem (np. `{{ $json.message.text }}` dla Telegrama, albo `{{ JSON.stringify($json) }}`, gdy wolisz oddać cały surowy JSON agentowi do samodzielnego sparsowania).
 - **Te same triggery nie mają naturalnej granicy „sesji" dla pamięci agenta** — domyślny `sessionIdType: fromInput` w Simple Memory wymiesza rozmowy różnych osób/wątków w jedną pamięć. Ustaw `sessionIdType: customKey` z kluczem opartym o realny identyfikator konwersacji (`chat.id` dla Telegrama, `thread_ts`/`ts` dla wątku na Slacku).
 
-Dokumentowanie węzłów (prawdziwe pole `Notes` per node, domyślny model OpenRouter, sticky note z podsumowaniem workflow) ma dedykowany skill: `.claude/skills/n8n/` (wywołanie: `/n8n`). Wywoływany tylko ręcznie przez użytkownika — samo słowo "n8n" w wiadomości NIE jest wywołaniem, nie uruchamiaj go samodzielnie/proaktywnie. Mechanika `removeNode`+`addNode` do ustawiania `node.notes` jest opisana w tym skillu, nie tutaj.
+Dokumentowanie węzłów (prawdziwe pole `Notes` per node, domyślny model OpenRouter, sticky note z podsumowaniem workflow) ma dedykowany skill: `.claude/skills/n8n/` (wywołanie: `/n8n`). Mechanika `removeNode`+`addNode` do ustawiania `node.notes` jest opisana w tym skillu, nie tutaj.
+
+## ElevenLabs — agenci i Agent Workflows przez elevenlabs MCP
+
+Agent i jego Agent Workflow (nody + edge'e routingu) edytuje się na żywo przez `mcp__elevenlabs__agents_create` / `agents_update`, nie przez pliki w tym repo. Konto jest na darmowym planie z limitem zużycia LLM — **nigdy nie odpalaj rozmowy z agentem (Preview / Call AI Agent / test konwersacji)**, testuje wyłącznie użytkownik.
+
+Agenci budowani w ramach kursu ElevenLabs (skill `11labs`) są tagowani `course-demo` (parametr `tags` w `agents_create`/`agents_update`) — analogicznie do konwencji nazewnictwa workflow w n8n, to sposób na odnalezienie właściwego agenta z serii przez `agents_list` zamiast zgadywania czy tworzenia duplikatu.
+
+**Nie ufaj bezkrytycznie stronie docs.elevenlabs.io w kwestii dokładnego kształtu API** — strona `eleven-agents/customization/agent-workflows` pokazuje `workflow` błędnie zagnieżdżone w `conversation_config.workflow`. Prawdziwy kształt requestu (PATCH `/v1/convai/agents/{id}`, potwierdzony w źródle `elevenlabs-python`) ma `workflow` jako pole **równorzędne** z `conversation_config`, `platform_settings`, `name`, `tags`. Gdy nazwa pola budzi wątpliwość, sprawdzaj w źródle SDK zamiast zgadywać: `gh api repos/elevenlabs/elevenlabs-python/contents/src/elevenlabs/types/<plik>.py --jq '.content' | base64 -d` (pliki `workflow_*.py`, `agent_workflow_*.py`, `*_workflow_override_*.py`).
+
+Kilka nieoczywistych zachowań schematu Agent Workflow wyłapanych w praktyce:
+
+- **Node'y muszą mieć różne `position: {x, y}`.** Pominięcie `position` albo identyczne współrzędne (np. wszystkie `{0,0}`) powodują, że node'y nakładają się w edytorze i widać tylko jeden.
+- **Knowledge base per node trzeba ustawić w DWÓCH miejscach jednocześnie:** `conversation_config.agent.prompt.knowledge_base` (realnie używane przez LLM w tym node'ie — pełny override, nie dodaje do globalnej bazy, tak osiąga się "brak dziedziczenia") oraz `additional_knowledge_base` (pole na poziomie node'a, obok `label`) — to drugie czyta panel UI ("Additional Documents"). Ustawienie tylko pierwszego działa dla modelu, ale w edytorze wygląda, jakby node nie miał żadnej bazy wiedzy.
+- **`entry_behavior: "generate_immediately"` + brak `first_message` na node'ie specjalisty** = node dynamicznie odpowiada na pytanie, które już padło u poprzednika (nie powtarza go, nie recytuje sztywnej linijki). `first_message` ustawiaj tylko tam, gdzie ma paść naprawdę stały tekst (zwykle start/main agent).
+- **Język a model TTS są sprzężone.** `eleven_flash_v2` i `eleven_turbo_v2` (bez `_5`) są tylko angielskie — `language` inny niż `en` przy takim modelu kończy się błędem 400 (`"Non-english Agents must use turbo or flash v2_5"`). Dla polskiego (i innych języków) używaj `eleven_flash_v2_5` / `eleven_turbo_v2_5` / `eleven_multilingual_v2` / `eleven_v3_conversational` — zarówno w bazowym `conversation_config`, jak i w każdym node'ie.
+- **PATCH na `conversation_config` i na `workflow.nodes`/`workflow.edges` nie robi bezpiecznego deep-merge z tym, co już tam jest** — traktuj to jak pełny replace tej gałęzi. Przed zmianą jednego pola głęboko w środku pobierz pełny aktualny obiekt (z ostatniej odpowiedzi `agents_update` albo świeżego `agents_get`), zmień w nim tylko to, co trzeba, i odeślij całość. To samo dotyczy `workflow.nodes`/`edges`: zawsze wysyłaj kompletny słownik wszystkich node'ów/edge'y, nie tylko te, które zmieniasz.
+- **Wybór głosu:** z `creative_list_voices` bierz tylko pozycje z `"category": "premade"` i `"is_library_voice": false` — to głosy gwarantowane na każdym planie, w tym darmowym. Głosy z `"is_library_voice": true` (Voice Library) mogą wymagać dodania do workspace'u i nie są pewne na koncie darmowym.
+- **Typy node'ów widziane w praktyce:** `start` (tylko `position`/`edge_order`), `override_agent` (`label`, `entry_behavior`, `conversation_config.agent.{language,first_message,prompt}`, `conversation_config.tts.{voice_id,model_id}`, `additional_knowledge_base`, `additional_prompt` — to ostatnie DODAJE do promptu, do pełnego zastąpienia służy `conversation_config.agent.prompt.prompt`), `end` (tylko `position`). `phone_number`, `standalone_agent`, `tool` istnieją w schemacie, ale nieprzetestowane — sprawdź pola w źródle SDK przed użyciem.
+- **Edge `forward_condition.type`:** `"unconditional"` (bez warunku), `"llm"` (naturalny język: `condition` + opcjonalny `label`), `"expression"` (deterministyczne AST), `"result"` (sukces/porażka narzędzia). `edge_order` na node'ie źródłowym ustala kolejność sprawdzania warunków LLM.
+
+Wykonywanie kolejnych zadań/lekcji kursu (budowa/edycja konkretnego agenta na podstawie wklejonej treści, w tym reguły "jeden lektor po polsku", "dane w KB syntetyczne i skromne", "ufaj screenowi bardziej niż transkrypcji audio") ma dedykowany skill: `.claude/skills/11labs/` (wywołanie: `/11labs`).
