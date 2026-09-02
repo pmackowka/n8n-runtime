@@ -1,6 +1,6 @@
 ---
 name: n8n
-description: Documents an n8n workflow via n8n-mcp — writes a 4-5 sentence Polish explanation into every node's real Settings > Notes field, defaults an unconfigured OpenRouter Chat Model to the free "openai/gpt-oss-120b" model, and adds one canvas-level Sticky Note summarizing the workflow. Use ONLY when the user explicitly invokes this skill by its exact name/command (e.g. "/n8n", "użyj skilla n8n"). The word "n8n" alone in a message is NOT an invocation — this repo, every workflow, and most messages here are about n8n, so do not treat ordinary mentions, questions, or unrelated n8n-mcp work as a trigger. Do NOT trigger this proactively or automatically either — not right after building or editing a workflow, not because documentation would obviously help. The user deliberately opted out of automatic triggering; wait for an explicit, unambiguous call every time.
+description: Documents an n8n workflow via n8n-mcp — writes a 4-5 sentence Polish explanation into every node's real Settings > Notes field, forces every OpenRouter Chat Model onto the free "openai/gpt-oss-120b" model (even overriding one that was already explicitly set to something else — paid OpenRouter models don't work on this user's account), and adds one canvas-level Sticky Note summarizing the workflow. Use ONLY when the user explicitly invokes this skill by its exact name/command (e.g. "/n8n", "użyj skilla n8n"). The word "n8n" alone in a message is NOT an invocation — this repo, every workflow, and most messages here are about n8n, so do not treat ordinary mentions, questions, or unrelated n8n-mcp work as a trigger. Do NOT trigger this proactively or automatically either — not right after building or editing a workflow, not because documentation would obviously help. The user deliberately opted out of automatic triggering; wait for an explicit, unambiguous call every time.
 ---
 
 # n8n (skill)
@@ -63,19 +63,21 @@ is wrong, nothing gets half-saved.
 Skip Sticky Note nodes (`n8n-nodes-base.stickyNote`) — they're already documentation and
 don't have a separate Notes field worth filling.
 
-## Step 2 — Default the OpenRouter model if it's missing
+## Step 2 — Force the free OpenRouter model, every time
 
 While rebuilding nodes in Step 1, check any node of type
 `@n8n/n8n-nodes-langchain.lmChatOpenRouter` ("OpenRouter Chat Model"). Its `model`
-parameter is a plain string (not a resource-locator object). If it's missing or empty,
-set it to `"openai/gpt-oss-120b"` when you recreate the node via `addNode` — a free-tier
-OpenRouter model already working in this instance (see workflow "009 — Asystent
-portfela inwestycyjnego w czacie"). This exists because an unconfigured model makes the
-node fail at runtime with no obvious error pointing at "you forgot to pick a model" —
-defaulting it here removes a step the user has had to do by hand every time.
+parameter is a plain string (not a resource-locator object). Always set it to
+`"openai/gpt-oss-120b"` when you recreate the node via `addNode` — regardless of whether
+the field is missing, empty, or already holds a different, explicitly-set model.
 
-If the node already has a different model explicitly set, leave it alone — that was a
-deliberate choice, not an oversight.
+**Paid OpenRouter models don't work on this user's account.** Do not treat an existing
+non-free model as a deliberate choice to be preserved, even if it looks reasoned (e.g.
+a stronger paid model picked because a course or task called for better reasoning
+quality). It will fail at runtime regardless of the reasoning behind it — the only model
+confirmed to actually run in this n8n instance is the free `openai/gpt-oss-120b` (see
+workflow "009 — Asystent portfela inwestycyjnego w czacie"). Overwrite it every time and
+mention in your report that you did, so the user knows a paid model was swapped out.
 
 ## Step 3 — One canvas-level Sticky Note
 
@@ -97,5 +99,5 @@ hit something you genuinely couldn't do without the user's input (e.g. workflow 
 found, ambiguous target):
 
 - which nodes got notes (just confirm "wszystkie N nodów", no need to restate content)
-- whether an OpenRouter model was defaulted, and to what
+- whether an OpenRouter model was set/corrected to the free default, and what it was before (if it changed)
 - the workflow's `url` (from the `get_workflow_details`/`update_workflow` response)

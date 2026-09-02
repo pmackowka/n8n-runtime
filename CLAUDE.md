@@ -51,6 +51,8 @@ Konwencja nazewnictwa workflow w tej instancji: `NNN — Opis po polsku (stack/s
 
 Zgodnie z instrukcjami samego serwera n8n-mcp: przed pisaniem kodu SDK workflow wywołaj `get_sdk_reference`, a dla każdej istotnej techniki `get_workflow_best_practices`.
 
+**Model na node'ie OpenRouter Chat Model musi być zawsze darmowy — płatne modele nie działają na koncie użytkownika.** Przy każdym tworzeniu, poprawianiu, naprawianiu lub edycji workflow zawierającego `@n8n/n8n-nodes-langchain.lmChatOpenRouter`, zweryfikuj pole `model` i ustaw/zostaw je na `openai/gpt-oss-120b` (sprawdzony, darmowy model używany w tej instancji, np. w workflow 009). Nie zakładaj, że inny, płatny model (np. `openai/gpt-4.1`) jest w porządku tylko dlatego, że materiał źródłowy (kurs, dokumentacja modelu) go poleca — u tego użytkownika taki model i tak się nie wykona, więc trzeba go zamienić na darmowy zamiennik za każdym razem, bez pytania.
+
 Kilka nieoczywistych zachowań `update_workflow` wyłapanych w praktyce:
 
 - **„Cannot modify workflow while it is being edited by a user in the editor"** — workflow jest otwarty w przeglądarce użytkownika. Trzeba go zamknąć/opuścić zakładkę, dopiero potem edycja przez API przejdzie.
