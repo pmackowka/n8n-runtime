@@ -62,6 +62,8 @@ Konwencja nazewnictwa workflow w tej instancji: `NNN — Opis po polsku (stack/s
 
 Zgodnie z instrukcjami samego serwera n8n-mcp: przed pisaniem kodu SDK workflow wywołaj `get_sdk_reference`, a dla każdej istotnej techniki `get_workflow_best_practices`.
 
+**Domyślny node dla każdego kroku wymagającego LLM to OpenRouter Chat Model (`@n8n/n8n-nodes-langchain.lmChatOpenRouter`) z modelem `openai/gpt-oss-120b` i istniejącym credentialem `OpenRouter account` — niezależnie od tego, jakiego providera sugeruje materiał źródłowy (kurs, lekcja, dokumentacja).** Kurs regularnie każe użyć konkretnego innego providera (Google Gemini, OpenAI wprost, Anthropic itd.) — ignoruj to bez pytania i zamiast tego podłącz OpenRouter z darmowym modelem. Nie zakładaj nowych credentiali dla innych providerów tylko dlatego, że lekcja tak pokazuje. Wyjątek: użytkownik w tej samej wiadomości wyraźnie prosi o konkretny inny provider/model — wtedy rób tak, jak prosi.
+
 **Model na node'ie OpenRouter Chat Model musi być zawsze darmowy — płatne modele nie działają na koncie użytkownika.** Przy każdym tworzeniu, poprawianiu, naprawianiu lub edycji workflow zawierającego `@n8n/n8n-nodes-langchain.lmChatOpenRouter`, zweryfikuj pole `model` i ustaw/zostaw je na `openai/gpt-oss-120b` (sprawdzony, darmowy model używany w tej instancji, np. w workflow 009). Nie zakładaj, że inny, płatny model (np. `openai/gpt-4.1`) jest w porządku tylko dlatego, że materiał źródłowy (kurs, dokumentacja modelu) go poleca — u tego użytkownika taki model i tak się nie wykona, więc trzeba go zamienić na darmowy zamiennik za każdym razem, bez pytania.
 
 Kilka nieoczywistych zachowań `update_workflow` wyłapanych w praktyce:
