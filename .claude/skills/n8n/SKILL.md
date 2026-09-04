@@ -32,6 +32,19 @@ Goal: every non-Sticky-Note node gets 4-5 sentences of Polish explanation in its
 on the node object (`node.notes`, sibling to `type`/`position`/`parameters`), not
 something inside `parameters`.
 
+**Never skip a node because it already has a Notes field.** An existing note is not
+evidence it's still accurate — it may narrate a past state (empty assignments, an
+unattached credential, "materiał źródłowy urywa się tutaj", a specific past execution
+number) that the workflow has since moved past. Every time this skill runs, re-derive
+each node's note from the fresh snapshot's actual current `parameters`/`credentials`,
+not from what the old note claims or from what you remember writing last time. If the
+old note and the current parameters disagree, the parameters win — rewrite the note in
+full. This applies to the canvas Sticky Note from Step 3 too: if one already exists,
+read it and rewrite it to match current state rather than leaving it untouched. Same
+rule as the project's own documentation style (CLAUDE.md "Styl dokumentacji"): describe
+only the current, concrete state — no "wcześniej było X, teraz Y", no historical
+narration, no references to specific past runs.
+
 **Why you can't just set it directly:** `update_workflow`'s `setNodeParameter` and
 `updateNodeParameters` operations always write inside `node.parameters`, no matter what
 JSON Pointer path you give them — `path: "/notes"` silently creates a bogus
