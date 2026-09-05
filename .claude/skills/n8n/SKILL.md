@@ -1,6 +1,6 @@
 ---
 name: n8n
-description: Documents an n8n workflow via n8n-mcp — writes a 4-5 sentence Polish explanation into every node's real Settings > Notes field, forces every OpenRouter Chat Model onto the free "openai/gpt-oss-120b" model (even overriding one that was already explicitly set to something else — paid OpenRouter models don't work on this user's account), and adds one canvas-level Sticky Note summarizing the workflow. Use ONLY when the user explicitly invokes this skill by its exact name/command (e.g. "/n8n", "użyj skilla n8n"). The word "n8n" alone in a message is NOT an invocation — this repo, every workflow, and most messages here are about n8n, so do not treat ordinary mentions, questions, or unrelated n8n-mcp work as a trigger. Do NOT trigger this proactively or automatically either — not right after building or editing a workflow, not because documentation would obviously help. The user deliberately opted out of automatic triggering; wait for an explicit, unambiguous call every time.
+description: Documents an n8n workflow via n8n-mcp — writes a short Polish explanation (max 2 sentences: what the node is and its role in this workflow) plus a bulleted breakdown of every actively-used configuration parameter (current value, an example alternative value, and why) into every node's real Settings > Notes field, forces every OpenRouter Chat Model onto the free "openai/gpt-oss-120b" model (even overriding one that was already explicitly set to something else — paid OpenRouter models don't work on this user's account), and adds one canvas-level Sticky Note summarizing the workflow. Use ONLY when the user explicitly invokes this skill by its exact name/command (e.g. "/n8n", "użyj skilla n8n"). The word "n8n" alone in a message is NOT an invocation — this repo, every workflow, and most messages here are about n8n, so do not treat ordinary mentions, questions, or unrelated n8n-mcp work as a trigger. Do NOT trigger this proactively or automatically either — not right after building or editing a workflow, not because documentation would obviously help. The user deliberately opted out of automatic triggering; wait for an explicit, unambiguous call every time.
 ---
 
 # n8n (skill)
@@ -27,10 +27,26 @@ snapshot.
 
 ## Step 1 — Real per-node Notes
 
-Goal: every non-Sticky-Note node gets 4-5 sentences of Polish explanation in its actual
-`Notes` field — the one under the node's **Settings** tab, which is a top-level property
-on the node object (`node.notes`, sibling to `type`/`position`/`parameters`), not
-something inside `parameters`.
+Goal: every non-Sticky-Note node gets a Polish explanation in its actual `Notes` field —
+the one under the node's **Settings** tab, which is a top-level property on the node
+object (`node.notes`, sibling to `type`/`position`/`parameters`), not something inside
+`parameters`. The note has two parts, in this order:
+
+1. **Prose, max 2 sentences.** What the node is, and — more usefully — its role in
+   *this* workflow specifically (what feeds it, what it decides, what downstream node
+   depends on it). Generic node-type descriptions are worth little; the point is this
+   instance's logic, the way a good inline comment explains a specific call site.
+2. **A bullet list, one bullet per configuration parameter that is actually set or used
+   on this node** (skip parameters left untouched at their default, empty, or not
+   applicable to this node's mode/resource/operation). For each such parameter, name it
+   and cover, in a sentence or two: what its **current value** is in this node, and an
+   **example of a different value** that could go there and *why* someone would pick it
+   instead. The goal is teaching the user what that parameter controls and the range of
+   reasonable choices — not just restating the value already visible in the node's UI.
+   Example (agent node's `text`/prompt field): "`promptType` is `auto`, so the user's
+   chat message is used directly as the prompt; setting it to `define` instead would let
+   you write a fixed or templated prompt here — useful when this agent's input isn't a
+   chat message at all, e.g. data piped in from an upstream node."
 
 **Never skip a node because it already has a Notes field.** An existing note is not
 evidence it's still accurate — it may narrate a past state (empty assignments, an
@@ -53,11 +69,10 @@ empirically: it produces no error, no validation warning, and the note simply do
 show up where the user expects it. The only operation whose schema exposes a top-level
 `notes` field is `addNode`. So setting Notes on an *existing* node means recreating it:
 
-1. From the snapshot you already have, for each real node write 4-5 sentences in Polish:
-   what the node is, and — more usefully — what role it plays in *this* workflow
-   specifically (what feeds it, what it decides, what downstream node depends on it).
-   Generic node-type descriptions are worth little; the point is to explain this
-   instance's logic, the way a good inline comment explains a specific call site.
+1. From the snapshot you already have, for each real node write the two-part Polish
+   note described above: max 2 sentences on what the node is and its role in this
+   workflow, then a bullet list breaking down each actively-used parameter (current
+   value, an example alternative, and why).
 2. Build ONE atomic `update_workflow` call containing, for every real node: a
    `removeNode` op for it, then an `addNode` op that recreates it with the *exact same*
    `id`, `type`, `typeVersion`, `parameters`, and `position` as the snapshot, plus the
