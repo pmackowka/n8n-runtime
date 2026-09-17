@@ -1,0 +1,131 @@
+{
+  "updatedAt": "2026-09-04T16:28:41.180Z",
+  "createdAt": "2026-09-04T16:17:12.201Z",
+  "id": "wREcybsU1YNJKlTe",
+  "name": "020 — Powiadomienie o nowym pliku w folderze Google Drive (Google Drive Trigger, Pushover)",
+  "description": "Google Drive Trigger (poll co minutę, folder placeholder) → Pushover (real credential, priorytet wysoki). Pierwsza w tej instancji klasyczna automatyzacja trigger→akcja bez AI Agenta. Wymaga jeszcze credentiala Google Drive OAuth2 i wskazania realnego fol",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "f0504e86-307b-42a8-9e2b-b1bc00b7cb3c",
+      "name": "Nowy plik w Amplify File Drop",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "Plik dotarł!",
+        "priority": 1,
+        "additionalFields": {}
+      },
+      "id": "c2b1571b-327a-44b7-ade2-8b5dff6cab56",
+      "name": "Powiadom o nowym pliku (Pushover)",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        288,
+        0
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Google Drive Trigger → powiadomienie push (Pushover)\n\nMonitoruje folder na Google Drive (sprawdzanie co minutę) i przy pojawieniu się nowego pliku wysyła powiadomienie push przez Pushover z ustalonym tekstem — bez udziału AI Agenta, czysta automatyzacja trigger→akcja.\n\n**Stan przed uruchomieniem**: `folderToWatch` na węźle Google Drive Trigger jest puste (placeholder) i węzeł nie ma jeszcze podłączonego credentiala Google Drive OAuth2 — trzeba dodać credential (pełny OAuth2, patrz notatka o integracji Google) i wskazać konkretny folder na Dysku Google. Węzeł Pushover ma już realny, działający credential i User Key (te same, co w workflow 011).",
+        "height": 256,
+        "width": 912,
+        "color": 4
+      },
+      "id": "9177dffc-23f7-4d32-9844-de5178c63766",
+      "name": "Sticky Note 9bc00e3c",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        224
+      ]
+    }
+  ],
+  "connections": {
+    "Nowy plik w Amplify File Drop": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o nowym pliku (Pushover)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c9e36103-0904-436a-965c-617b66cd077c",
+  "activeVersionId": null,
+  "versionCounter": 4,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-04T16:17:12.202Z",
+      "createdAt": "2026-09-04T16:17:12.202Z",
+      "role": "workflow:owner",
+      "workflowId": "wREcybsU1YNJKlTe",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

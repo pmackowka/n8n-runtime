@@ -1,0 +1,264 @@
+{
+  "updatedAt": "2026-09-03T10:09:14.011Z",
+  "createdAt": "2026-09-03T08:44:35.336Z",
+  "id": "6JE3peLlwCGYugtB",
+  "name": "016 — Czat z syntezą mowy (Chat Trigger, OpenRouter, dedykowany node ElevenLabs)",
+  "description": "Symetryczna wersja workflow 015, ale zamiast generycznego HTTP Request używa dedykowanego, zainstalowanego community node'a ElevenLabs (@elevenlabs/n8n-nodes-elevenlabs) — resource speech, operation textToSpeech.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "669f4bd1-8190-4311-a248-d316a2fca642",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        768,
+        544
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Subnode modelu językowego podpięty do Agent AI przez połączenie `ai_languageModel`. Model ustawiony na `openai/gpt-oss-120b` — jedyny model OpenRouter, który faktycznie działa na koncie tego użytkownika; płatne modele kończą się błędem wykonania. Korzysta z istniejącego credentiala \"OpenRouter account\", współdzielonego z innymi workflow w tej instancji (np. 009-015) — podpięty automatycznie przy tworzeniu tego workflow, bez potrzeby zakładania nowego. Ten subnode odpowiada wyłącznie za generowanie odpowiedzi tekstowej — zamiana na mowę dzieje się dalej, w dedykowanym node ElevenLabs."
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "voice": {
+          "__rl": true,
+          "mode": "id",
+          "value": "EXAVITQu4vr4xnSDxMaL",
+          "cachedResultName": "Sarah - Mature, Reassuring, Confident"
+        },
+        "text": "={{ $json.output }}",
+        "additionalOptions": {
+          "model": {
+            "__rl": true,
+            "mode": "id",
+            "value": "eleven_multilingual_v2",
+            "cachedResultName": "Eleven Multilingual v2"
+          }
+        },
+        "requestOptions": {},
+        "operation": "textToSpeech"
+      },
+      "id": "226740ed-0777-4d11-b460-06aa59f7c0ae",
+      "name": "ElevenLabs - tekst na mowe (node dedykowany)",
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        304
+      ],
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "c15p3FKAMGG7alOS",
+          "name": "ElevenLabs account"
+        }
+      },
+      "notes": "Dedykowany, zainstalowany community node ElevenLabs (`@elevenlabs/n8n-nodes-elevenlabs`) — wersja symetryczna workflow 015, gdzie ten sam krok był realizowany generycznym HTTP Request, bo w tamtym momencie dedykowany node nie był jeszcze zainstalowany w tej instancji. Resource `speech`, operacja `textToSpeech` — zamienia tekst z pola `$json.output` (odpowiedź Agent AI) na plik audio. Głos ustawiony na Sarah (`EXAVITQu4vr4xnSDxMaL`) — premade voice gwarantowany na darmowym planie ElevenLabs (głosy z Voice Library, np. domyślny Rachel, kończą się błędem 402 na darmowym koncie). Model `eleven_multilingual_v2` rozpoznaje i syntezuje język automatycznie z treści tekstu, bez potrzeby osobnego parametru — obsługuje polski. Autoryzacja przez dedykowany credential typu ElevenLabs API (\"ElevenLabs account\") — inny typ niż generyczny Header Auth używany w workflow 015, więc nie dało się go podpiąć automatycznie i trzeba było założyć nowy z tym samym kluczem."
+    },
+    {
+      "parameters": {
+        "content": "## 016 — Agent głosowy przez webhook (dedykowany node ElevenLabs)\nZamiast panelu czatu w edytorze, przepływ startuje teraz z ogólnego webhooka (`POST`, `responseMode: responseNode`) — dowolny klient (np. strona testowa `voice.html` z kursu) wysyła nagranie audio, ElevenLabs (mowa na tekst) transkrybuje je na tekst, Agent AI (OpenRouter, `gpt-oss-120b`) odpowiada, a ElevenLabs (tekst na mowę, głos Sarah) zamienia odpowiedź z powrotem na audio — które wraca jako odpowiedź HTTP przez Respond to Webhook.\nDo testowania: w edytorze kliknij „Execute workflow” (uzbraja Test URL na jedno wywołanie), dopiero potem wyślij nagranie ze strony `voice.html` na `http://localhost:5678/webhook-test/voice-agent`.\nCredentiale: **OpenRouter account** i **ElevenLabs account** — oba już podpięte.\nPotwierdzone: `voice.html` wysyła audio jako `multipart/form-data`, więc n8n ląduje je w polu binarnym `data0` (nie `data`) — tak skonfigurowany jest teraz node mowa-na-tekst.",
+        "height": 280,
+        "width": 1004
+      },
+      "id": "76595921-f938-413b-8c44-08c55a123b19",
+      "name": "Opis workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-agent",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryPropertyName": "data",
+          "binaryData": true
+        }
+      },
+      "id": "77c27b85-22cc-4c94-adc0-7c46a9e6fcd8",
+      "name": "Webhook - przyjmuje nagranie audio",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "cb805a00-6cfb-491b-af24-f7fa0109d26b",
+      "notes": "Ogólny, generyczny webhook (nie dedykowany trigger platformy) — punkt wejścia dla dowolnego klienta, który wyśle nagranie audio przez POST (np. strona testowa voice.html z kursu, nagrywająca głos w przeglądarce i wysyłająca surowe bajty audio). Metoda ustawiona na POST (domyślnie webhook nasłuchuje GET) — potrzebujemy przyjąć dane, nie tylko wywołać akcję. `responseMode: responseNode` — webhook NIE odpowiada natychmiast po odebraniu żądania; czeka, aż na końcu łańcucha zadziała osobny node Respond to Webhook, dzięki czemu można zwrócić wygenerowany plik audio jako właściwą odpowiedź HTTP. Przychodzące dane binarne trafiają do pola `data` (`options.binaryPropertyName`) — stamtąd czyta je kolejny node, ElevenLabs (mowa na tekst)."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "options": {
+          "systemMessage": "Jesteś pomocnym asystentem, który porozumiewa się w języku polskim.\n"
+        }
+      },
+      "id": "4fb164a7-44b7-4099-94f9-feb4f26f9888",
+      "name": "Agent AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        688,
+        304
+      ],
+      "notes": "Odbiera transkrybowany tekst z node'a ElevenLabs (mowa na tekst) — `promptType: define` z wyrażeniem `{{ $json.text }}`, bo nie ma tu już Chat Trigger, który wcześniej dostarczał `chatInput` automatycznie (`promptType: auto` przestał mieć sens po zamianie wejścia z czatu na webhook). Ma ustawiony system message wymuszający odpowiedzi po polsku. Model językowy podpięty jako subnode: OpenRouter Chat Model (darmowy `openai/gpt-oss-120b`). Świadomie bez narzędzi i bez pamięci — każda odpowiedź jest niezależna. Wynikowe pole `output` trafia dalej do node'a ElevenLabs (tekst na mowę), który generuje finalne audio zwracane przez webhook."
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {}
+      },
+      "id": "d5f4124b-43f0-43bb-87e2-75ddbaf1e020",
+      "name": "Odpowiedz na webhook (audio)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1264,
+        304
+      ],
+      "notes": "Ostatni krok łańcucha — działa wyłącznie dlatego, że Webhook na początku ma ustawione `responseMode: responseNode`. `respondWith: binary` z domyślnym `responseDataSource: automatically` — zwraca dane binarne (wygenerowany plik audio) z bieżącego item'a jako właściwą odpowiedź HTTP na oryginalne żądanie POST, bez potrzeby ręcznego wskazywania nazwy pola. Dzięki temu klient, który wysłał nagranie na webhook (np. strona voice.html), dostaje w odpowiedzi gotowy plik audio z odpowiedzią agenta, a nie samo potwierdzenie przyjęcia żądania."
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "operation": "speechToText",
+        "file": "data0",
+        "additionalOptions": {
+          "languageCode": "pl"
+        },
+        "requestOptions": {}
+      },
+      "id": "3df8e392-e8e7-45c4-a8f6-bf7fea4e19f4",
+      "name": "ElevenLabs - mowa na tekst (node dedykowany)",
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        480,
+        304
+      ],
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "c15p3FKAMGG7alOS",
+          "name": "ElevenLabs account"
+        }
+      },
+      "notes": "Dedykowany node ElevenLabs, resource `speech`, operacja `speechToText` — pobiera plik audio z binarnego pola `data0` i transkrybuje go na tekst przez API ElevenLabs (model Scribe). Pole nazywa się `data0`, nie `data` — webhook otrzymuje nagranie jako `multipart/form-data` (tak wysyła je strona voice.html przez FormData), a n8n przy tym typie żądania automatycznie dokleja numer do prefiksu ustawionego w node'ie Webhook (`data` -> `data0`), niezależnie od nazwy pola w kodzie strony. Potwierdzone empirycznie w egzekucji #35 (`Cannot read properties of undefined (reading 'id')`, bo szukano nieistniejącego pola `data`). `languageCode` ustawiony na `pl`, żeby wymusić poprawne rozpoznawanie polskiej mowy. Wynikowe pole `text` z odpowiedzi API trafia dalej do Agent AI jako treść zapytania użytkownika."
+    }
+  ],
+  "connections": {
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent AI": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs - tekst na mowe (node dedykowany)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs - tekst na mowe (node dedykowany)": {
+      "main": [
+        [
+          {
+            "node": "Odpowiedz na webhook (audio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - przyjmuje nagranie audio": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs - mowa na tekst (node dedykowany)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs - mowa na tekst (node dedykowany)": {
+      "main": [
+        [
+          {
+            "node": "Agent AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "0dd6bb9e-2b8d-4379-926f-a0d1d462b188",
+  "activeVersionId": null,
+  "versionCounter": 15,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-03T08:44:35.337Z",
+      "createdAt": "2026-09-03T08:44:35.337Z",
+      "role": "workflow:owner",
+      "workflowId": "6JE3peLlwCGYugtB",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Audit: przywrócono ubite discriminatory",
+    "description": "Weryfikacja zgodności Notes z bieżącym stanem (na żądanie użytkownika) wykryła, że n8n po cichu usunął \"operation\": \"textToSpeech\" z node ElevenLabs TTS oraz \"options.binaryData\": true z Webhooka — oba przywrócone. Reszta notatek zgodna z bieżącymi parametrami, bez zmian."
+  }
+}

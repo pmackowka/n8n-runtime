@@ -1,0 +1,477 @@
+{
+  "updatedAt": "2026-09-02T11:42:45.129Z",
+  "createdAt": "2026-09-02T09:33:38.538Z",
+  "id": "mnHk5hkBGjgobwEt",
+  "name": "014 — Rebalancer portfela akcji (formularz startowy)",
+  "description": "Form Trigger startujący projekt rebalansera portfela akcji: jedno pole tekstowe z instrukcją rebalansu (domyślnie 60/40 akcje/stały dochód). Odtworzone z kursu — dalsze kroki (Arkusz Google z portfelem, sprawdzanie cen, AI Agent decyzyjny, e-mail z transa",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 014 — Rebalancer portfela akcji (formularz startowy)\n\nFormularz pyta, jak zrównoważyć portfel (domyślnie 60% akcje / 40% stały dochód); AI Agent (OpenRouter, darmowy model openai/gpt-oss-120b, do 30 iteracji) odczytuje arkusz portfela, pobiera ceny z Marketstack, aktualizuje arkusz i decyduje o rebalansie, korzystając z sześciu narzędzi (2× Google Sheets, Marketstack, Pushover, Gmail). Ostatni krok agenta to jednowyrazowa odpowiedź „OK” albo „FAILED”, którą sprawdza węzeł If „Sprawdź wynik rebalansu” — sukces trafia do spokojnego powiadomienia push (priorytet -1), porażka do awaryjnego (priorytet 2, retry). To osobna, deterministyczna warstwa powiadomień, niezależna od Pushover/Gmail wywoływanych przez samego agenta w trakcie pracy.\n\n**Przed testem:** podepnij credential Google Sheets pod oba node'y „...arkusz portfela” i wybierz w UI plik „portfolio” oraz jego pierwszy arkusz (placeholdery); podepnij też credential Gmail i wpisz realny adres odbiorcy w node'ie „Wyślij e-mail z decyzjami handlowymi” (też placeholder). Uruchom przez „Execute Workflow” na kanwie — otworzy się okno formularza.",
+        "height": 300,
+        "width": 1080
+      },
+      "id": "da9702c2-7b24-4efd-bddd-2b8f3354c3d4",
+      "name": "Podsumowanie workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "formTitle": "Portfolio rebalancer",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "W jaki sposób chcesz zrównoważyć swój portfel?",
+              "defaultValue": "Upewnij się, że portfel składa się w 60% z akcji i 40% z instrumentów o stałym dochodzie."
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e6385969-ba9b-4d4c-878f-0b019dea9a45",
+      "name": "Formularz rebalansu portfela",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        -112
+      ],
+      "webhookId": "91051470-33ce-4be6-852d-95d685ea2cd3",
+      "notes": "Punkt startowy całego workflow — formularz webowy z jednym polem tekstowym: „W jaki sposób chcesz zrównoważyć swój portfel?”, z domyślną wartością „Upewnij się, że portfel składa się w 60% z akcji i 40% z instrumentów o stałym dochodzie.”. Uruchamia się, gdy ktoś wypełni i wyśle ten formularz pod publicznym adresem webhooka n8n. Treść odpowiedzi trafia bez zmian do node'a AI Agent jako $json, pod kluczem będącym dosłownie etykietą tego pola. Atrybucja „Form automated with n8n” jest wyłączona (appendAttribution: false), więc formularz nie pokazuje stopki n8n. To jedyny sposób na przekazanie instrukcji rebalansu do agenta w tym workflow — nie ma tu żadnego innego triggera."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Masz dostęp do portfela akcji użytkownika, który znajduje się w arkuszu Google, oraz do bieżących danych rynkowych.\n\nUżytkownik poprosił o zrównoważenie swojego portfela za pomocą tej instrukcji:\n{{ $json['W jaki sposób chcesz zrównoważyć swój portfel?'] }}\n\nAby to osiągnąć:\n1. Odczytaj portfel z arkusza.\n2. Pobierz najnowsze ceny pozycji.\n3. Zaktualizuj tabelę o ceny.\n4. Podejmij decyzje dotyczące rebalansu portfela.\n5. Zaktualizuj tabelę o decyzje dotyczące rebalansu (nowa ilość po rebalansie).\n6. Przeczytaj ponownie tabelę, żeby sprawdzić, czy rebalans spełnił założony cel.\n7. Jeśli trzeba, wprowadź dalsze poprawki (iteruj).\n8. Na koniec wyślij e-mail z decyzjami handlowymi oraz krótkie powiadomienie push.\n9. Twoja ostateczna odpowiedź (ostatnia wiadomość) ma być wyłącznie jednym słowem: OK, jeśli cel rebalansu został faktycznie osiągnięty, albo FAILED, jeśli po wyczerpaniu dostępnych iteracji cel nie został osiągnięty. Żadnego dodatkowego tekstu w tej ostatniej wiadomości — ten pojedynczy wyraz steruje dalszą automatyczną logiką przepływu pracy.\n\nWażne: zanim odpowiesz OK albo FAILED, potwierdź w kroku 6, że cel rebalansu został faktycznie sprawdzony. Odpowiadaj dopiero, gdy misja jest w pełni wykonana — nie kończ przedwcześnie.",
+        "options": {
+          "maxIterations": 30
+        }
+      },
+      "id": "4cdf03a6-c942-4711-8f34-66de106dc84c",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        544,
+        -112
+      ],
+      "notes": "Główny węzeł orkiestrujący — agent LangChain z rozbudowanym promptem: kontekst (dostęp do arkusza portfela i danych rynkowych), instrukcja użytkownika z formularza, 9-krokowa lista (odczyt → ceny → decyzje → zapis → weryfikacja → iteracja → e-mail+push → jednowyrazowa odpowiedź OK/FAILED). maxIterations podniesione z domyślnych 10 do 30, żeby starczyło pętli na odczyt-zapis-weryfikację-poprawki. Ma dostęp do darmowego modelu OpenRouter (gpt-oss-120b) i sześciu narzędzi: odczyt arkusza portfela, pobranie cen z Marketstack, aktualizacja ceny i nowej ilości w arkuszu, powiadomienie push (Pushover, priorytet wysoki) i e-mail z decyzjami handlowymi (Gmail, HTML) — wszystkie wywoływane samodzielnie przez agenta w trakcie pracy. Jego ostateczna odpowiedź tekstowa (krok 9 promptu) musi być dosłownie „OK” albo „FAILED” — to jedyne dane, jakie w polu $json.output dostaje podłączony na wyjściu main węzeł „Sprawdź wynik rebalansu”, kierujący na tej podstawie do jednego z dwóch tradycyjnych (nie-AI-tool) powiadomień push. Świadomie bez pamięci konwersacji (jednorazowe zgłoszenie z formularza) i bez osobnego system message — cały kontekst siedzi w jednym polu Prompt (User Message)."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "f6cb6d6e-04b8-4cf5-a5f3-22cf61e3527c",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        232,
+        120
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla AI Agenta, podłączony przez port ai_languageModel. Model ustawiony na darmowy openai/gpt-oss-120b przez OpenRouter — jedyny model, który realnie działa na koncie OpenRouter użytkownika w tej instancji (płatne modele nie wykonują się). Korzysta z credentiala „OpenRouter account”, tego samego co w innych workflow. Węzeł nie działa samodzielnie — to „silnik myślenia” dla AI Agenta, podłączony specjalnym połączeniem ai_languageModel, a nie głównym przepływem danych."
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "To narzędzie udostępnia szczegóły portfela użytkownika z Arkusza Google, w podziale na pozycje akcyjne i o stałym dochodzie. Użyj go, aby pobrać arkusz i zobaczyć pozycje przed aktualizacją cen i podjęciem decyzji o rebalansie. Użyj go również po przywróceniu równowagi, aby sprawdzić, czy podział osiągnął zamierzony cel — jeśli nie, kontynuuj iterację.",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "portfolio"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "<__PLACEHOLDER_VALUE__wybierz pierwszy arkusz w pliku portfolio__>"
+        }
+      },
+      "id": "1ddf9a90-0d3b-4ba9-9ec6-eda9abc812e2",
+      "name": "Odczytaj arkusz portfela",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        360,
+        120
+      ],
+      "notes": "Jedno z sześciu narzędzi AI (port ai_tool) tego agenta — odczytuje całą zawartość arkusza Google Sheets z portfelem inwestycyjnym użytkownika (kolumny Ticker, Quantity, Equity ratio, Fixed income ratio, Price, Total Value, New Quantity After Rebalancing, New Total Value). Operacja read bez żadnych filtrów, więc agent za jednym wywołaniem dostaje cały arkusz. Ma ręcznie napisany opis dla LLM (descriptionType: manual) — mówi wprost, kiedy go użyć: przed aktualizacją cen i decyzjami o rebalansie oraz ponownie po nim, żeby zweryfikować cel. To krok 1. i 6. promptu agenta. documentId i sheetName są na razie placeholderami — w tej instancji nie ma jeszcze podpiętego credentiala Google Sheets, trzeba go dodać i wybrać właściwy dokument/arkusz ręcznie w UI, zanim narzędzie zadziała. Dopóki dokument nie jest realnie podłączony, pola resource/operation bywają cicho zerowane przez n8n przy niezwiązanych edycjach workflow — po każdej edycji warto sprawdzić świeżym odczytem, czy nadal tu są."
+    },
+    {
+      "parameters": {
+        "symbols": "={{ $fromAI('Ticker', '', 'string') }}",
+        "filters": {
+          "latest": true
+        }
+      },
+      "id": "0311b1b1-7ac0-44bd-86ea-f435b7e14fe5",
+      "name": "Pobierz aktualne ceny z Marketstack",
+      "type": "n8n-nodes-base.marketstackTool",
+      "typeVersion": 1,
+      "position": [
+        488,
+        120
+      ],
+      "credentials": {
+        "marketstackApi": {
+          "id": "qvBsJwbnLHsN32nd",
+          "name": "Marketstack account"
+        }
+      },
+      "notes": "Narzędzie AI (port ai_tool) pobierające najnowsze dane end-of-day (cenę zamknięcia) dla wskazanego tickera z Marketstack. Parametr symbols jest wypełniany dynamicznie przez agenta (mechanizm $fromAI) na podstawie tickera, którego cenę akurat sprawdza — filtr latest: true ogranicza wynik do najnowszej notowanej ceny, bez pobierania całej historii. Agent wywołuje je w kroku 2. swojego promptu („Pobierz najnowsze ceny pozycji”), dla każdego tickera z portfela odczytanego wcześniej narzędziem „Odczytaj arkusz portfela”. Wynik trafia z powrotem do agenta, który następnie zapisuje cenę do arkusza narzędziem „Zaktualizuj cenę w arkuszu portfela”. W przeciwieństwie do narzędzi Google Sheets w tym workflow, ma już realnie podłączony credential „Marketstack account” i jest gotowe do użycia."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "portfolio"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "<__PLACEHOLDER_VALUE__wybierz pierwszy arkusz w pliku portfolio__>"
+        }
+      },
+      "id": "93dc5657-44c8-4351-842f-ec1cc1464c74",
+      "name": "Zaktualizuj cenę w arkuszu portfela",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        616,
+        120
+      ],
+      "notes": "Narzędzie AI (port ai_tool) zapisujące zaktualizowaną cenę instrumentu z powrotem do arkusza portfela — dopasowuje wiersz po kolumnie Ticker (matchingColumns) i nadpisuje kolumnę Price wartością, którą agent dostał wcześniej z narzędzia Marketstack. To krok 3. promptu agenta („Zaktualizuj tabelę o ceny”). Schema kolumn (Ticker, Quantity, Equity ratio, Fixed income ratio, Price, Total Value, New Quantity After Rebalancing, New Total Value) odzwierciedla rzeczywisty układ arkusza „portfolio”. documentId i sheetName są nadal placeholderami — narzędzie nie zadziała, dopóki w tej instancji nie zostanie podłączony credential Google Sheets i wybrany właściwy plik/arkusz w UI. Dopóki tak jest, cały obiekt columns (mapowanie kolumn) bywa cicho zerowany przez n8n przy niezwiązanych edycjach workflow — po każdej edycji warto sprawdzić świeżym odczytem, czy mapowanie nadal tu jest."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "portfolio"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "<__PLACEHOLDER_VALUE__wybierz pierwszy arkusz w pliku portfolio__>"
+        }
+      },
+      "id": "f735b8e3-5b93-42f8-92ba-ed2ca8bcbdcc",
+      "name": "Zaktualizuj ilość po rebalansie w arkuszu portfela",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        744,
+        120
+      ],
+      "notes": "Narzędzie AI (port ai_tool) zapisujące decyzję agenta o nowej liczbie jednostek danego instrumentu po rebalansie — dopasowuje wiersz po kolumnie Ticker i nadpisuje kolumnę New Quantity After Rebalancing. To krok 5. promptu agenta („Zaktualizuj tabelę o decyzje dotyczące rebalansu”), wywoływane po tym jak agent policzy docelową alokację zgodnie z instrukcją z formularza. Ma tę samą schema kolumn co narzędzie do aktualizacji ceny, bo działa na tym samym arkuszu „portfolio”. Tak samo jak pozostałe narzędzia Google Sheets w tym workflow — czeka na podłączenie credentiala i wybór dokumentu/arkusza w UI, zanim faktycznie zapisze cokolwiek, a do tego czasu jego mapowanie columns bywa cicho zerowane przez n8n przy niezwiązanych edycjach workflow — warto to sprawdzać świeżym odczytem po każdej edycji."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $fromAI('message', 'Treść powiadomienia push o wyniku rebalansu portfela') }}",
+        "priority": 1,
+        "additionalFields": {}
+      },
+      "id": "d864cd67-12cf-4808-a63d-0c84f089b9a0",
+      "name": "Wyślij powiadomienie push (Pushover)",
+      "type": "n8n-nodes-base.pushoverTool",
+      "typeVersion": 1,
+      "position": [
+        872,
+        120
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Narzędzie AI (port ai_tool) wysyłające powiadomienie push na telefon przez Pushover, wywoływane w kroku 8. promptu agenta po zakończeniu rebalansu. Priorytet ustawiony na wysoki (1), żeby powiadomienie ominęło tryb cichy telefonu i faktycznie zaalarmowało użytkownika. Treść (message) jest w całości od modelu ($fromAI) — agent sam formułuje krótkie podsumowanie tego, co zrobił. Korzysta z tego samego userKey i credentiala „Pushover account”, co już działający workflow 011. Osobny od tradycyjnych (nie-AI-tool) węzłów „Push: rebalans zakończony sukcesem” i „Push: rebalans nieudany”, wywoływanych deterministycznie przez węzeł If, niezależnie od decyzji agenta wywołać to narzędzie."
+    },
+    {
+      "parameters": {
+        "sendTo": "<__PLACEHOLDER_VALUE__adres e-mail, na który mają trafiać decyzje rebalansu (Twój Gmail)__>",
+        "subject": "Decyzje handlowe rebalansu portfela akcji",
+        "message": "={{ $fromAI('message', 'Treść e-maila HTML z podsumowaniem decyzji handlowych podjętych podczas rebalansu portfela') }}",
+        "options": {}
+      },
+      "id": "4dacd875-6d2f-402d-92c8-c3e59c54cdd1",
+      "name": "Wyślij e-mail z decyzjami handlowymi",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        120
+      ],
+      "webhookId": "a9b6a9a2-5efe-40af-a963-b502b47c0136",
+      "notes": "Narzędzie AI (port ai_tool) wysyłające e-mail HTML z podsumowaniem decyzji handlowych, wywoływane w kroku 8. promptu agenta jako drugi (obok Pushover) kanał powiadomienia. Temat jest stały: „Decyzje handlowe rebalansu portfela akcji”, ale treść wiadomości w całości pisze model ($fromAI) na podstawie tego, co faktycznie zrobił podczas rebalansu. sendTo jest placeholderem — w tej instancji nie ma podłączonego credentiala Gmail, trzeba go dodać i wpisać realny adres odbiorcy w UI, zanim narzędzie zadziała."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.trim() }}",
+              "rightValue": "OK",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "61403377-1a94-4ad3-aa7e-9e391f4b1b1c"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c8e99ca-60b7-40a0-90ab-031a07bbc8c3",
+      "name": "Sprawdź wynik rebalansu",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1200,
+        -112
+      ],
+      "notes": "Węzeł logiki przepływu pracy (nie AI tool) — sprawdza dosłowną treść ostatniej odpowiedzi AI Agenta ({{ $json.output }}, przycięte z białych znaków) pod kątem równości ze słowem „OK”. W przeciwieństwie do narzędzi AI podpiętych do agenta (Pushover jako tool, Gmail jako tool), ten węzeł jest stałym krokiem przepływu — wywoływany zawsze po zakończeniu pracy agenta, niezależnie od jego decyzji. Gałąź „true” (agent odpowiedział dokładnie OK) prowadzi do spokojnego powiadomienia push o sukcesie; gałąź „false” (każda inna odpowiedź, w tym FAILED) prowadzi do awaryjnego powiadomienia push o niepowodzeniu. Warunek działa tylko wtedy, gdy prompt agenta (krok 9) faktycznie wymusza to jednowyrazowe podsumowanie jako ostatnią wiadomość."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "Przywrócenie równowagi portfela zakończyło się sukcesem.",
+        "priority": -1,
+        "additionalFields": {}
+      },
+      "id": "d1b3dea8-c88c-4f8d-8b73-8a7619ef0ca9",
+      "name": "Push: rebalans zakończony sukcesem",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        -208
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Tradycyjny krok przepływu pracy (nie AI tool) — wysyła spokojne powiadomienie push (priorytet -1, bez dźwięku/wibracji) po tym, jak węzeł „Sprawdź wynik rebalansu” potwierdzi, że ostatnia odpowiedź AI Agenta to dokładnie „OK”. Osobny od narzędzia „Wyślij powiadomienie push (Pushover)” używanego przez samego agenta w trakcie pracy — ten węzeł jest wywoływany zawsze i deterministycznie na podstawie gałęzi If, nie decyzji LLM. Korzysta z tego samego credentiala i userKey co narzędzie push agenta."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "Rebalancer portfela nie powiódł się.",
+        "priority": 2,
+        "retry": 60,
+        "expire": 3600,
+        "additionalFields": {}
+      },
+      "id": "ec705675-4a8d-418a-b9cf-4189dd416ad0",
+      "name": "Push: rebalans nieudany",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        -16
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Tradycyjny krok przepływu pracy (nie AI tool) — wysyła awaryjne powiadomienie push (priorytet 2, wymaga potwierdzenia odbioru, retry co 60s przez maks. godzinę) po tym, jak węzeł „Sprawdź wynik rebalansu” stwierdzi, że ostatnia odpowiedź AI Agenta nie brzmiała dokładnie „OK” (np. FAILED albo cokolwiek innego). Osobny od narzędzia push używanego przez agenta w trakcie pracy — to deterministyczny alarm na poziomie przepływu pracy, niezależny od tego, czy agent sam zdążył wywołać swoje narzędzia push/e-mail."
+    }
+  ],
+  "connections": {
+    "Formularz rebalansu portfela": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odczytaj arkusz portfela": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz aktualne ceny z Marketstack": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zaktualizuj cenę w arkuszu portfela": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zaktualizuj ilość po rebalansie w arkuszu portfela": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyślij powiadomienie push (Pushover)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyślij e-mail z decyzjami handlowymi": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Sprawdź wynik rebalansu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdź wynik rebalansu": {
+      "main": [
+        [
+          {
+            "node": "Push: rebalans zakończony sukcesem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Push: rebalans nieudany",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "7c4a2503-7080-476e-abe5-3c94027b2a7c",
+  "activeVersionId": null,
+  "versionCounter": 25,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-02T09:33:38.540Z",
+      "createdAt": "2026-09-02T09:33:38.540Z",
+      "role": "workflow:owner",
+      "workflowId": "mnHk5hkBGjgobwEt",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

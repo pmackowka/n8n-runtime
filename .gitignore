@@ -1,3 +1,5 @@
 # Sekrety — nigdy do repo
 .env
 *.env
+
+.DS_Store

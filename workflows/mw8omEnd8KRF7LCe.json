@@ -1,0 +1,119 @@
+{
+  "updatedAt": "2026-09-01T13:24:08.687Z",
+  "createdAt": "2026-07-06T07:34:45.513Z",
+  "id": "mw8omEnd8KRF7LCe",
+  "name": "000 — Demo",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        -32
+      ],
+      "id": "048c8624-7f06-474b-aba4-823f08a4d7b1",
+      "name": "When chat message received",
+      "webhookId": "915a4bdd-e92f-4a72-9e7f-d9b235bd6968"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        -32
+      ],
+      "id": "13ca02b7-6ecc-48e0-84b7-b6a39162bc4f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "=models/gemini-3-flash-preview",
+        "options": {
+          "maxOutputTokens": 2048
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        176
+      ],
+      "id": "0985d421-1e82-46d2-9bcb-a753775edfd7",
+      "name": "Google Gemini Chat Model"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "62cda1a8-17bf-4bd8-b430-872b02391bbc",
+  "activeVersionId": null,
+  "versionCounter": 9,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-06T07:34:45.519Z",
+      "createdAt": "2026-07-06T07:34:45.519Z",
+      "role": "workflow:owner",
+      "workflowId": "mw8omEnd8KRF7LCe",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

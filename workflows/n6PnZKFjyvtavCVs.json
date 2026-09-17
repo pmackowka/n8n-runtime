@@ -1,0 +1,219 @@
+{
+  "updatedAt": "2026-09-06T12:54:33.904Z",
+  "createdAt": "2026-09-06T12:47:49.130Z",
+  "id": "n6PnZKFjyvtavCVs",
+  "name": "026 — Subagent SDR: outreach do leadów z Pipedrive (Execute Workflow Trigger, AI Agent, Pipedrive Tool, Gmail Tool)",
+  "description": "Execute Workflow Trigger (pole offerBrief) → AI Agent (OpenRouter) z dwoma narzędziami: odczytuje wszystkie osoby z Pipedrive i tworzy każdej z nich spersonalizowany szkic maila w Gmailu. Wymaga ręcznego podłączenia credentiala Gmail OAuth2.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "offerBrief"
+            }
+          ]
+        }
+      },
+      "id": "efbf6251-0970-44d4-ba98-de654b587f4d",
+      "name": "Uruchomiony przez inny workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Węzeł startowy tego workflow — uruchamia go, gdy zostanie wywołany przez inny workflow (Execute Sub-workflow) albo w przyszłości przez narzędzie Call n8n Workflow Tool z poziomu agenta-menedżera Rev Ops/SDR. Przekazane dane trafiają jako wejście do węzła Silnik outreach SDR.\n\n- workflowInputs (inputSource: workflowInputs, wartość domyślna): wymusza zdefiniowanie konkretnych pól wejściowych zamiast przyjmowania dowolnego JSON-a; alternatywa jsonExample pozwoliłaby opisać oczekiwany kształt przykładowym JSON-em, a passthrough przepuściłby cały obiekt wejściowy bez walidacji pól.\n- workflowInputs.values: jedno pole offerBrief typu string — opis oferty (nadawca, produkt, wezwanie do działania), na podstawie którego agent tworzy treść maili; dodanie np. drugiego pola targetSegment pozwoliłoby wywołującemu zawęzić grupę odbiorców zamiast zawsze mailować do wszystkich osób z Pipedrive."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.offerBrief }}",
+        "options": {
+          "systemMessage": "Jestes SDR-em (Sales Development Rep) odpowiedzialnym za dotarcie do potencjalnych klientow zapisanych w CRM Pipedrive.\n\nNajpierw uzyj narzedzia Pipedrive, zeby odczytac wszystkie rekordy osob z CRM. Nastepnie dla KAZDEJ zwroconej osoby uzyj narzedzia Gmail, zeby utworzyc osobny szkic (draft) maila sprzedazowego zaadresowanego do niej - nie wysylaj zadnego maila, tylko tworz szkice.\n\nTresc i temat maila oprzyj WYLACZNIE na opisie oferty podanym w wiadomosci uzytkownika, spersonalizowanym o imie i firme odbiorcy z Pipedrive. Nie wymyslaj zadnych dodatkowych informacji o produkcie, firmie, cenach ani warunkach, ktorych nie ma w opisie oferty. Mail ma byc krotki, profesjonalnie sformatowany w HTML i konczyc sie jasnym wezwaniem do dzialania opisanym w ofercie.",
+          "maxIterations": 25
+        }
+      },
+      "id": "02c4097f-ce7b-4df6-a923-abce45989c03",
+      "name": "Silnik outreach SDR",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        0
+      ],
+      "notes": "AI Agent realizujący zadanie SDR (Sales Development Rep) — na podstawie opisu oferty (offerBrief) przekazanego przez węzeł Uruchomiony przez inny workflow samodzielnie decyduje, kiedy odczytać osoby z Pipedrive i kiedy utworzyć dla nich szkice maili w Gmailu. W przeciwieństwie do subagenta Rev Ops (workflow 025) używa tu narzędzi zamiast structured output, bo liczba potrzebnych wywołań zależy od liczby zwróconych osób i nie da się jej ustalić z góry jako sztywnego łańcucha kroków.\n\n- promptType: define — pobiera prompt wprost z wyrażenia w polu text, zamiast domyślnego auto (które czytałoby chatInput z Chat Triggera); ta wartość jest wymagana, bo trigger tego workflow to Execute Workflow Trigger, nie czat.\n- text: ={{ $json.offerBrief }} — wstawia jako prompt opis oferty otrzymany od wywołującego workflow; stały tekst dałby agentowi zawsze tę samą, niezmienną ofertę do sprzedania, niezależnie od danych wejściowych.\n- options.systemMessage — wymusza dwuetapowy proces (najpierw pobierz wszystkie osoby, potem dla każdej utwórz osobny szkic) i jawnie zakazuje wymyślania szczegółów oferty spoza offerBrief; bez tego zakazu model dopisuje wiarygodnie brzmiące, ale zmyślone detale produktu — to nie błąd modelu, tylko brak instrukcji, więc warto to zawsze wprost ograniczać w promptach generujących treści zewnętrzne.\n- options.maxIterations: 25 — limit kroków agenta podniesiony ponad wartości używane przy dużych zestawach narzędzi (np. 15 w workflow 023), bo tu liczba potrzebnych wywołań rośnie liniowo z liczbą osób w Pipedrive (jedno pobranie + jeden draft na osobę); zbyt niski limit przerwałby tworzenie szkiców w połowie listy przy większej liczbie kontaktów."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "4228fb3b-5ef7-48e8-afeb-1f0c568ea4ac",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik outreach SDR — interpretuje opis oferty, decyduje kiedy wywołać narzędzie Pipedrive i ile razy wywołać narzędzie Gmail, oraz redaguje treść każdego maila.\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy); płatny model, np. openai/gpt-5.2 sugerowany w materiale źródłowym, wymagałby płatnego konta OpenRouter i nie zadziała tutaj.\n- credentials.openRouterApi: podłączony credential OpenRouter account — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter; osobny credential miałby sens tylko, gdyby trzeba było rozdzielić limity/billing między różnymi kontami OpenRouter."
+    },
+    {
+      "parameters": {
+        "resource": "person",
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {}
+      },
+      "id": "d154d330-74bb-482f-850a-d9d8182f80d8",
+      "name": "Pipedrive - Pobierz wszystkie osoby",
+      "type": "n8n-nodes-base.pipedriveTool",
+      "typeVersion": 2,
+      "position": [
+        368,
+        240
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      },
+      "notes": "Pierwsze z dwóch narzędzi (subnode ai_tool) podłączonych do agenta Silnik outreach SDR — pobiera z Pipedrive wszystkie zapisane rekordy osób, które agent następnie po kolei przetwarza, tworząc dla każdej osobny szkic maila.\n\n- resource/operation: person/getAll — pobiera listę rekordów osób z CRM; zmiana resource na organization przy tej samej operacji pobrałaby zamiast tego listę firm, bez powiązanych z nimi kontaktów.\n- authentication: apiToken — uwierzytelnienie stałym kluczem API konta Pipedrive, spójne z resztą integracji Pipedrive w tej instancji.\n- returnAll: true — pobiera komplet rekordów bez limitu; ustawienie false i limit np. na 20 ograniczyłoby liczbę zwróconych osób (a tym samym liczbę wysłanych do Gmaila draftów) do pierwszych 20 rekordów, co przydałoby się przy bardzo dużej bazie kontaktów, żeby nie przekroczyć limitu iteracji agenta.\n- credentials.pipedriveApi: podłączony credential Pipedrive account — bez niego wywołanie zwróci błąd autoryzacji."
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('emailSubject', 'Temat maila sprzedazowego dopasowany do odbiorcy i oferty') }}",
+        "emailType": "html",
+        "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('emailBody', 'Tresc maila w HTML, oparta wylacznie na opisie oferty i danych odbiorcy z Pipedrive') }}",
+        "options": {
+          "sendTo": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('recipientEmail', 'Adres e-mail odbiorcy, pobrany z rekordu osoby w Pipedrive') }}"
+        }
+      },
+      "id": "521e9984-1b8a-4fef-ba62-c8fa48ea595a",
+      "name": "Gmail - Utworz szkic maila",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        240
+      ],
+      "webhookId": "c4d54f08-d99a-478c-9da5-f5c4a03cbbe0",
+      "notes": "Drugie z dwóch narzędzi (subnode ai_tool) — tworzy w Gmailu szkic (draft) maila, osobno dla każdej osoby zwróconej przez narzędzie Pipedrive; nie wysyła żadnej wiadomości, tylko zapisuje ją jako roboczą do ręcznego przejrzenia i wysłania przez użytkownika.\n\n- resource/operation: draft/create — tworzy nowy szkic wiadomości; zmiana operation na getAll pozwoliłaby zamiast tego odczytać istniejące szkice, bez tworzenia nowych.\n- authentication: oAuth2 — uwierzytelnienie przez konto Google użytkownika (wymaga ręcznie założonego credentiala Gmail OAuth2, jeszcze niepodłączonego); serviceAccount miałby sens przy wysyłce w imieniu współdzielonej skrzynki firmowej zamiast osobistego konta Gmail.\n- subject: $fromAI(emailSubject, ...) — temat maila generowany przez model, dopasowany do odbiorcy i oferty przy każdym wywołaniu narzędzia.\n- emailType: html (wartość stała) — wymusza sformatowanie treści jako HTML zamiast zwykłego tekstu; text dałby prostszy, niesformatowany mail, mniej przekonujący wizualnie w kontekście sprzedażowym.\n- message: $fromAI(emailBody, ...) — treść maila w HTML generowana przez model wyłącznie na podstawie opisu oferty i danych odbiorcy z Pipedrive, zgodnie z zakazem wymyślania szczegółów z system message agenta.\n- options.sendTo: $fromAI(recipientEmail, ...) — adres odbiorcy ustawiany jawnie przez model na podstawie adresu e-mail konkretnej osoby z Pipedrive; pozostawienie tego pola pustego (jak w pierwszej wersji tego workflow z lekcji) tworzyłoby szkice bez wypełnionego pola Do, wymagające ręcznego uzupełnienia adresata przed wysyłką."
+    },
+    {
+      "parameters": {
+        "content": "## Subagent SDR: outreach do leadów z Pipedrive\n\nExecute Workflow Trigger uruchamia ten workflow z jednym polem wejściowym `offerBrief` (opis oferty: nadawca, produkt, wezwanie do działania). AI Agent (OpenRouter, openai/gpt-oss-120b) samodzielnie korzysta z dwóch narzędzi: najpierw pobiera z Pipedrive wszystkie zapisane osoby, a potem dla każdej z nich tworzy w Gmailu osobny, spersonalizowany szkic maila sprzedażowego — nigdy nie wysyła maila automatycznie, tylko zapisuje szkic do ręcznego przejrzenia. System prompt jawnie zakazuje modelowi wymyślania szczegółów oferty spoza offerBrief, żeby maile nie zawierały zmyślonych informacji o produkcie czy warunkach. Żeby przetestować: uruchom workflow ręcznie (Test workflow) i podaj w polu offerBrief opis oferty, np. Nadawca: Donna, CTO firmy AI Accounting. Produkt: oprogramowanie księgowe AI. CTA: zadzwoń pod numer X, a potem sprawdź w Gmailu w folderze Wersje robocze, czy powstały szkice dla wszystkich osób z Pipedrive. Wymaga podłączonego credentiala Gmail OAuth2 (jeszcze niepołączony) — bez niego narzędzie Gmail zwróci błąd autoryzacji.",
+        "height": 244,
+        "width": 1404,
+        "color": 4
+      },
+      "id": "6c6dba5c-0dad-4573-aeab-512aa7b2a397",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -384,
+        448
+      ]
+    }
+  ],
+  "connections": {
+    "Uruchomiony przez inny workflow": {
+      "main": [
+        [
+          {
+            "node": "Silnik outreach SDR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik outreach SDR",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipedrive - Pobierz wszystkie osoby": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik outreach SDR",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Utworz szkic maila": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik outreach SDR",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "ddb0918b-0a02-4c07-959a-eccf217fc3ae",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-06T12:47:49.131Z",
+      "createdAt": "2026-09-06T12:47:49.131Z",
+      "role": "workflow:owner",
+      "workflowId": "n6PnZKFjyvtavCVs",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

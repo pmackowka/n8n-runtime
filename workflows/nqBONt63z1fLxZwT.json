@@ -1,0 +1,211 @@
+{
+  "updatedAt": "2026-09-01T13:23:01.950Z",
+  "createdAt": "2026-09-01T07:49:12.334Z",
+  "id": "nqBONt63z1fLxZwT",
+  "name": "010 — Asystent Gmail w czacie (odczyt ostatniej doby + szkice odpowiedzi, OpenRouter)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "460e28be-5501-4267-860b-0f8c3cf944fe",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "To węzeł startowy (trigger) całego workflow — nasłuchuje na wiadomości przychodzące z wbudowanego interfejsu czatu n8n. Uruchamia workflow za każdym razem, gdy użytkownik wyśle wiadomość w oknie chatu. Przekazuje treść wiadomości (chatInput) dalej do węzła AI Agent jako dane wejściowe wraz z identyfikatorem sesji, dzięki czemu Simple Memory wie, której rozmowy dotyczy kontekst. Bez tego węzła workflow nie ma sposobu na odebranie zapytania od użytkownika w trybie konwersacyjnym.",
+      "webhookId": "fece3f47-5079-42ff-80cd-d35a984226b8"
+    },
+    {
+      "id": "b715ded8-8214-4b72-bfe1-c7628920c32a",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        208,
+        0
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "Główny węzeł orkiestrujący cały workflow — implementuje agenta AI z biblioteki LangChain, który interpretuje polecenie użytkownika i decyduje, jakich narzędzi użyć, by je zrealizować. Korzysta z modelu językowego podłączonego przez port ai_languageModel (OpenRouter Chat Model) oraz pamięci konwersacji (Simple Memory), dzięki której pamięta wcześniejsze wiadomości w tej samej sesji. Ma dostęp do dwóch narzędzi Gmail: odczytu wiadomości z ostatniej doby oraz tworzenia szkiców odpowiedzi. Sam decyduje, które z nich wywołać i z jakimi parametrami, na podstawie treści rozmowy z użytkownikiem."
+    },
+    {
+      "id": "8d1ad652-f73b-4a85-8238-96c291821e8a",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        208
+      ],
+      "parameters": {},
+      "notes": "Węzeł pamięci konwersacyjnej typu Buffer Window — przechowuje ostatnie wymiany wiadomości między użytkownikiem a agentem w ramach jednej sesji czatu, trzymając je w pamięci n8n bez potrzeby zewnętrznej bazy danych. Dzięki niemu AI Agent \"pamięta\" kontekst wcześniejszych pytań i odpowiedzi, zamiast traktować każdą wiadomość jako oderwaną od reszty. Podłączony jest do AI Agent przez port ai_memory, a nie przez główny przepływ danych. Bez tego węzła agent odpowiadałby na każde pytanie \"od zera\", tracąc kontekst całej rozmowy o skrzynce pocztowej."
+    },
+    {
+      "id": "b2a9414a-0153-4d49-b8ca-488701f3983f",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        208
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "Dostawca modelu językowego dla AI Agent, podłączony przez OpenRouter — pośrednika dającego dostęp do wielu modeli LLM przez jedno API i jeden komplet credentiali. Węzeł nie działa samodzielnie — pełni rolę \"silnika myślenia\" dla AI Agent, generując odpowiedzi i decyzje o wywołaniu narzędzi na podstawie promptu i historii rozmowy. Podłączony jest do agenta przez specjalne połączenie ai_languageModel, a nie przez standardowy przepływ danych main. Konkretny model nie został jeszcze wybrany w parametrach węzła — trzeba go ustawić przed pierwszym uruchomieniem.",
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "id": "f34806a2-8f41-4b8a-8382-734e23cedd22",
+      "name": "Get many messages in Gmail",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        208
+      ],
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "receivedAfter": "={{ $now.minus({ days: 1 }) }}"
+        }
+      },
+      "notes": "Narzędzie (tool) udostępnione AI Agentowi, które pobiera listę wiadomości ze skrzynki Gmail spełniających filtr czasowy. Filtr receivedAfter ustawiony jest jako wyrażenie $now.minus({ days: 1 }), więc zawsze dynamicznie liczy \"wczoraj\" względem chwili wykonania, zamiast sztywno wpisanej daty, którą trzeba by ręcznie aktualizować. Agent wywołuje ten węzeł samodzielnie, gdy użytkownik prosi o sprawdzenie najnowszych maili. Wynik (nadawca, temat, treść) trafia z powrotem do agenta jako dane do dalszej analizy lub podsumowania.",
+      "webhookId": "73de9516-56be-4a61-9ca7-abdb4664421f"
+    },
+    {
+      "id": "a1e282b6-11f7-4213-b09b-04b45387ecd3",
+      "name": "Create a draft in Gmail",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        208
+      ],
+      "parameters": {
+        "resource": "draft",
+        "operation": "create",
+        "subject": "={{ $fromAI('subject', 'Temat wiadomości e-mail', 'string') }}",
+        "message": "={{ $fromAI('message', 'Treść wiadomości e-mail', 'string') }}",
+        "options": {
+          "sendTo": ""
+        }
+      },
+      "notes": "Narzędzie AI Agenta do tworzenia szkiców (draft) wiadomości Gmail — świadomie nie wysyła maili automatycznie, tylko zapisuje wersję roboczą do ręcznej weryfikacji i wysyłki przez użytkownika. Temat i treść (subject, message) agent generuje sam przez mechanizm fromAI na podstawie rozmowy. Pole odbiorcy (sendTo) jest natomiast celowo wpisane na sztywno, a nie przez fromAI, żeby agent nie mógł sam wybrać, do kogo trafi wiadomość — to świadome ograniczenie bezpieczeństwa z kursu, nie przeoczenie. Zanim to zadziała, trzeba uzupełnić sendTo właściwym adresem i podpiąć credential Gmail OAuth2.",
+      "webhookId": "37329177-babb-4b12-be51-de0286fce92c"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages in Gmail": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a draft in Gmail": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "8007c79c-111d-43f0-a902-3afb49c2c958",
+  "activeVersionId": null,
+  "versionCounter": 28,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-01T07:49:12.336Z",
+      "createdAt": "2026-09-01T07:49:12.336Z",
+      "role": "workflow:owner",
+      "workflowId": "nqBONt63z1fLxZwT",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

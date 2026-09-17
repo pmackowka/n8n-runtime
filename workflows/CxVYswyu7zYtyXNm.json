@@ -1,0 +1,293 @@
+{
+  "updatedAt": "2026-09-06T13:23:44.523Z",
+  "createdAt": "2026-09-06T11:53:41.222Z",
+  "id": "CxVYswyu7zYtyXNm",
+  "name": "025 — Subagent Rev Ops: zapis leada do CRM Pipedrive (Execute Workflow Trigger, AI Agent, Pipedrive Tool)",
+  "description": "Execute Workflow Trigger (leadDescription) → AI Agent (OpenRouter, Structured Output Parser) parsuje opis do JSON; 3 zwykle wezly Pipedrive tworza po kolei organizacje, osobe i leada z mapowanymi ID miedzy krokami.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Subagent Rev Ops: zapis leada do CRM Pipedrive\n\nExecute Workflow Trigger uruchamia ten workflow z jednym polem wejściowym `leadDescription` (dowolny opis tekstowy potencjalnego klienta). AI Agent (OpenRouter, openai/gpt-oss-120b) z Structured Output Parser parsuje opis na pola fullName, company, role, email — bez żadnych narzędzi, bo to zadanie ekstrakcji, nie autonomicznego działania. Trzy kolejne zwykłe węzły Pipedrive (nie Tool) tworzą po kolei: organizację (nazwa = company), osobę (imię = fullName, e-mail = email, powiązana przez org_id) i leada (tytuł = fullName + company, powiązanego przez person_id i organization_id) — identyfikatory są jawnie mapowane wyrażeniami między krokami zamiast oddawania tej logiki modelowi. Żeby przetestować: uruchom workflow ręcznie (Test workflow) i podaj w polu leadDescription opis leada, np. Jan Kowalski, dyrektor sprzedaży w Acme Sp. z o.o., jan.kowalski@acme.pl, a potem sprawdź w Pipedrive, czy powstały trzy powiązane rekordy. Wymaga podłączonego credentiala Pipedrive API (typ apiToken) — jest już skonfigurowany jako Pipedrive account.",
+        "height": 608,
+        "width": 1420,
+        "color": 4
+      },
+      "id": "225938ac-45d8-4cbc-9694-3d363b1d4952",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "leadDescription"
+            }
+          ]
+        }
+      },
+      "id": "e2b5cbe7-e4eb-4d94-b171-c964fccd9b98",
+      "name": "Uruchomiony przez inny workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Węzeł startowy tego workflow — uruchamia go, gdy zostanie wywołany przez inny workflow (Execute Sub-workflow) albo w przyszłości przez narzędzie Call n8n Workflow Tool z poziomu agenta-menedżera Rev Ops. Przekazane dane trafiają jako wejście do węzła Silnik parsowania leada.\n\n- workflowInputs (inputSource: workflowInputs, wartość domyślna): wymusza zdefiniowanie konkretnych pól wejściowych zamiast przyjmowania dowolnego JSON-a; alternatywa jsonExample pozwoliłaby opisać oczekiwany kształt przykładowym JSON-em, a passthrough przepuściłby cały obiekt wejściowy bez walidacji pól.\n- workflowInputs.values: jedno pole leadDescription typu string — jedyne dane, jakich oczekuje ten workflow od wywołującego; dodanie np. drugiego pola source pozwoliłoby wywołującemu jawnie przekazać pochodzenie leada, zamiast polegać wyłącznie na tym, co agent wywnioskuje z treści opisu."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.leadDescription }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Na podstawie opisu potencjalnego klienta (leada) podanego przez uzytkownika zwroc jego dane w ustrukturyzowanej formie: pelne imie i nazwisko (fullName), nazwe firmy (company), stanowisko (role) oraz adres e-mail (email). Twoja odpowiedz zostanie uzyta do utworzenia rekordow w CRM Pipedrive (organizacja, osoba, lead). Jesli ktorejs informacji brakuje w opisie, zostaw odpowiednie pole puste - nie wymyslaj danych."
+        }
+      },
+      "id": "8964b60b-9b65-438d-9c02-4acc913658d4",
+      "name": "Silnik parsowania leada",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "091e8149-56e3-4a78-80e4-d21bf8f64e33",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik parsowania leada — interpretuje opis leada i wypełnia pola wymuszone przez Structured Output Parser (fullName, company, role, email).\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy); płatny model, np. openai/gpt-4.1, wymagałby płatnego konta OpenRouter i nie zadziała tutaj.\n- credentials.openRouterApi: podłączony credential OpenRouter account — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter; osobny credential miałby sens tylko, gdyby trzeba było rozdzielić limity/billing między różnymi kontami OpenRouter."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"fullName\": \"Jan Kowalski\", \"company\": \"Acme Sp. z o.o.\", \"role\": \"Dyrektor sprzedazy\", \"email\": \"jan.kowalski@acme.pl\" }"
+      },
+      "id": "7ee09c25-a4eb-4546-a480-c08f1356753f",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        480,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "organization",
+        "name": "={{ $json.output.company }}",
+        "additionalFields": {}
+      },
+      "id": "836e96b3-54d0-4da6-a2d0-327dc74c7457",
+      "name": "Utworz organizacje",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "person",
+        "name": "={{ $('Silnik parsowania leada').item.json.output.fullName }}",
+        "additionalFields": {
+          "emails": {
+            "emailProperties": [
+              {
+                "value": "={{ $('Silnik parsowania leada').item.json.output.email }}"
+              }
+            ]
+          },
+          "org_id": "={{ $json.id }}"
+        }
+      },
+      "id": "13e6a8c2-b3bd-46ea-ae40-35a9941d91da",
+      "name": "Utworz osobe",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "position": [
+        912,
+        0
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "lead",
+        "title": "={{ $('Silnik parsowania leada').item.json.output.fullName }} - {{ $('Silnik parsowania leada').item.json.output.company }}",
+        "associateWith": "person",
+        "person_id": "={{ Number($json.id) }}",
+        "additionalFields": {
+          "organization_id": "={{ Number($('Utworz organizacje').item.json.id) }}"
+        }
+      },
+      "id": "a9d6f13b-1294-47a6-b5e9-73624a4b2c5d",
+      "name": "Utworz leada",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        0
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Uruchomiony przez inny workflow": {
+      "main": [
+        [
+          {
+            "node": "Silnik parsowania leada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik parsowania leada",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Silnik parsowania leada",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Silnik parsowania leada": {
+      "main": [
+        [
+          {
+            "node": "Utworz organizacje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Utworz organizacje": {
+      "main": [
+        [
+          {
+            "node": "Utworz osobe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Utworz osobe": {
+      "main": [
+        [
+          {
+            "node": "Utworz leada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {
+    "Uruchomiony przez inny workflow": [
+      {
+        "json": {
+          "leadDescription": "Jan Kowalski, dyrektor sprzedaży w Acme Sp. z o.o., jan.kowalski@acme.pl"
+        }
+      }
+    ]
+  },
+  "versionId": "c2caef89-7453-49af-b582-cc9fef8b3de5",
+  "activeVersionId": "c3993e65-93ce-47ba-b2a7-22ff76479f86",
+  "versionCounter": 13,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-06T11:53:41.226Z",
+      "createdAt": "2026-09-06T11:53:41.226Z",
+      "role": "workflow:owner",
+      "workflowId": "CxVYswyu7zYtyXNm",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Fix: wymuszenie numerycznego typu ID dla Pipedrive Lead",
+    "description": "Zasoby kursu (aktualizacja czerwiec 2026) zglaszaja, ze Pipedrive person/organization ID bywa zwracane jako string, co psuje pola person_id/organization_id na Lead (typowane jako number). Owiniecie w Number(...) zapobiega temu bledowi zanim wystapi."
+  }
+}

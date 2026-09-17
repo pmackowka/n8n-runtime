@@ -1,0 +1,205 @@
+{
+  "updatedAt": "2026-09-03T08:50:56.523Z",
+  "createdAt": "2026-09-03T06:30:57.225Z",
+  "id": "8Kd8pPHwB1qElU9W",
+  "name": "015 — Czat z syntezą mowy (Chat Trigger, Gemini, ElevenLabs TTS przez HTTP Request)",
+  "description": "Chat Trigger → AI Agent (Google Gemini) → HTTP Request wywołujący ElevenLabs text-to-speech. Odtworzone z kursu: generyczny węzeł HTTP Request zamiast dedykowanego community node ElevenLabs (niedostępny w katalogu tej instancji).",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "streaming"
+        }
+      },
+      "id": "ae1d2b7a-aaa3-4cc4-9022-1cec75c431eb",
+      "name": "Wiadomosc na czacie",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "143b9ef2-d476-4bdb-a989-d1f51b644dd6",
+      "notes": "Punkt wejścia workflow — wbudowany panel czatu n8n, testowany bezpośrednio w edytorze (ikona czatu), bez potrzeby zewnętrznej platformy. Tryb odpowiedzi ustawiony na `streaming`, więc Agent AI przesyła odpowiedź na żywo do widgetu czatu niezależnie od dalszych kroków w łańcuchu. To jedyny tryb, który tu działa poprawnie — ostatni node w łańcuchu (HTTP Request do ElevenLabs) zwraca plik binarny, a nie tekst, więc tryb `lastNode` zakończyłby się błędem widgetu. Każda wiadomość użytkownika trafia dalej do node'a Agent AI jako `chatInput`."
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Jesteś pomocnym asystentem, który porozumiewa się w języku polskim."
+        }
+      },
+      "id": "967ed7fd-1a76-4c2b-8b92-afc258bfafb1",
+      "name": "Agent AI",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        544,
+        304
+      ],
+      "notes": "Odbiera wiadomość z Chat Trigger — `promptType: auto`, więc bierze pole `chatInput` automatycznie, bez ręcznie zdefiniowanego promptu. Model językowy podpięty jako subnode: OpenRouter Chat Model (darmowy `openai/gpt-oss-120b`). Świadomie bez narzędzi i bez pamięci — każda odpowiedź jest niezależna, bez historii konwersacji, zgodnie z pierwotnym zamysłem tego kroku kursu. Wynikowe pole `output` (czysty tekst odpowiedzi) trafia bezpośrednio do węzła ElevenLabs jako treść do syntezy mowy."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"text\": $json.output, \"model_id\": \"eleven_multilingual_v2\" } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "d8055328-4ad3-4c62-ae93-0da715509527",
+      "name": "ElevenLabs - tekst na mowe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        848,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2GVDv9BZGle3a1oL",
+          "name": "Header Auth account"
+        }
+      },
+      "notes": "Generyczny węzeł HTTP Request wywołujący bezpośrednio REST API ElevenLabs (`POST /v1/text-to-speech/{voice_id}`) — dedykowany community node ElevenLabs nie jest zainstalowany w katalogu tej instancji n8n. Głos zaszyty w URL to Sarah (`EXAVITQu4vr4xnSDxMaL`) — premade voice gwarantowany na darmowym planie; pierwotnie wybrany głos Rachel z Voice Library kończył się błędem 402 (`paid_plan_required`). Treść body to `text: $json.output` z Agent AI oraz `model_id: eleven_multilingual_v2`, który rozpoznaje i syntezuje język automatycznie z tekstu (obsługuje polski bez osobnego parametru). Autoryzacja przez credential typu Header Auth (\"Header Auth account\") — musi mieć nagłówek nazwany dokładnie `xi-api-key`. Odpowiedź to plik binarny `audio/mpeg` (`responseFormat: file`)."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "959ec318-be0d-4902-8f53-4222e7be3382",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        544,
+        512
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Subnode modelu językowego podpięty do Agent AI przez połączenie `ai_languageModel`. Model ustawiony na `openai/gpt-oss-120b` — jedyny model OpenRouter, który faktycznie działa na koncie tego użytkownika; płatne modele kończą się błędem wykonania. Podmieniony z Google Gemini Chat Model na prośbę użytkownika, żeby uniknąć zakładania nowego konta w Google AI Studio i wykorzystać już istniejący, działający credential OpenRouter. Korzysta z credentiala \"OpenRouter account\", współdzielonego z innymi workflow w tej instancji (np. 009-014)."
+    },
+    {
+      "parameters": {
+        "content": "## 015 — Czat z syntezą mowy\nNapisz wiadomość w panelu czatu w edytorze (ikona czatu) — Agent AI (OpenRouter, darmowy model `gpt-oss-120b`) odpowiada tekstem, a węzeł HTTP Request zamienia tę odpowiedź na mowę głosem Sarah przez REST API ElevenLabs.\nDo działania potrzebne są dwa skonfigurowane credentiale: **OpenRouter account** (już podpięty) oraz **Header Auth account** na węźle ElevenLabs — nagłówek `xi-api-key` z kluczem z elevenlabs.io/app/settings/api-keys.\nWynikowy plik `audio/mpeg` pojawia się jako dane binarne na wyjściu ostatniego node'a — sprawdź go w panelu wykonania, w zakładce Binary.",
+        "height": 220,
+        "width": 1084
+      },
+      "id": "077d53a3-7c7c-4818-a635-8a17413661d6",
+      "name": "Opis workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        64,
+        704
+      ]
+    }
+  ],
+  "connections": {
+    "Wiadomosc na czacie": {
+      "main": [
+        [
+          {
+            "node": "Agent AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent AI": {
+      "main": [
+        [
+          {
+            "node": "ElevenLabs - tekst na mowe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent AI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ElevenLabs - tekst na mowe": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c45d6dcd-3cb5-45e3-a547-5f2cc4b80f96",
+  "activeVersionId": null,
+  "versionCounter": 17,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-03T06:30:57.226Z",
+      "createdAt": "2026-09-03T06:30:57.226Z",
+      "role": "workflow:owner",
+      "workflowId": "8Kd8pPHwB1qElU9W",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,0 +1,262 @@
+{
+  "updatedAt": "2026-09-04T08:44:47.110Z",
+  "createdAt": "2026-09-03T15:20:10.955Z",
+  "id": "G3MpKg9LSv1K2x3J",
+  "name": "018 — Pozyskiwanie danych do RAG: katalog produktów (Manual Trigger, Google Sheets, Edit Fields)",
+  "description": "Manual Trigger → Data Table (katalog produktów) → mapowanie pól (content, category) → zapis do Supabase Vector Store (insert, tabela knowledgebase), embedding OpenAI przez OpenRouter. Wyszukiwanie i agent głosowy ElevenLabs to kolejny etap.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b56160e7-3423-4643-b581-b5de04bdfd06",
+      "name": "Uruchom ręcznie",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Ręczny wyzwalacz — uruchamia pipeline pozyskiwania danych po kliknięciu \"Execute workflow\" w edytorze n8n. Docelowo (wg lekcji) ma to być zastąpione wyzwalaczem reagującym na nowy plik w folderze Google Drive, ale to wymaga dodatkowej konfiguracji OAuth i jest odłożone na później. Na razie to jedyny sposób odpalenia tego workflow."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "content-field",
+              "name": "content",
+              "type": "string",
+              "value": "=Product Name: {{ $json.Name }}\n\nCategory: {{ $json.Category }}\n\nSKU: {{ $json.SKU }}\n\nPrice: ${{ $json.Price }}\n\nDescription: {{ $json.Description }}"
+            },
+            {
+              "id": "category-field",
+              "name": "category",
+              "type": "string",
+              "value": "={{ $json.Category }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8e57db5c-0b66-43ab-9d84-946a48bb032c",
+      "name": "Zmapuj dane produktu",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Krok transformacji (ETL: transform) — tu dopiero mają trafić właściwe mapowania pól z Arkusza Google do formatu oczekiwanego przez bazę wektorową Supabase. Materiał źródłowy (lekcja) urywa się dokładnie w momencie otwarcia tego węzła, przed pokazaniem konkretnego mapowania (jakie pole → jaka nazwa/format) — nie zgaduję go, żeby nie wymyślać nieistniejącej specyfikacji. Assignments są celowo puste do czasu, aż dostanę dalszą treść lekcji. Kolejne kroki (Supabase, vector store, kod SQL do inicjalizacji bazy) też nie są jeszcze zbudowane z tego samego powodu."
+    },
+    {
+      "parameters": {
+        "content": "## Pozyskiwanie danych do RAG — katalog produktów\n\nManual Trigger → odczyt produktów (Data Table \"Products\", 60 wierszy) → Edit Fields (content + category) → Supabase Vector Store (insert do tabeli knowledgebase), z podwęzłami Embeddings OpenAI (przez OpenRouter, text-embedding-3-small, 1536-dim) i Default Data Loader (pole content, metadana category w metadata).\n\n**Stan: przetestowane end-to-end** — oba wymagane credentiale (Supabase API, OpenAI z kluczem OpenRouter + baseURL na openrouter.ai) są podpięte, a uruchomienie workflow poprawnie zapisało wszystkich 60 produktów jako dokumenty w Supabase (execution 45).\n\n**Jak przetestować ponownie:** otwórz workflow, kliknij \"Execute workflow\" przy węźle Manual Trigger — po chwili powinno przejść na zielono przez cały łańcuch.\n\n**Jutro wg lekcji:** część odpowiadająca na pytania (wyszukiwanie w Supabase) + agent głosowy ElevenLabs.",
+        "height": 356,
+        "width": 1024,
+        "color": 5
+      },
+      "id": "2b90d1dc-2085-406d-aa1e-e7c796a4fac4",
+      "name": "Sticky Note 20226c2a",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "cWbmuxEVWdkbnL77",
+          "cachedResultName": "Products"
+        },
+        "returnAll": true
+      },
+      "id": "e4119f45-9694-41c4-afdd-120344ead058",
+      "name": "Odczytaj produkty (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Źródło danych pipeline'u — czyta z wbudowanej n8n Data Table \"Products\", którą użytkownik wypełnił bezpośrednio w UI n8n (Overview → Data tables), bez potrzeby żadnego credentiala. Zawiera pełny katalog klienta — 60 wierszy, kolumny Name, Category, SKU, Price, Description (wielkość liter jak w tabeli źródłowej). Zastępuje Google Sheets z materiału źródłowego — ten sam kształt danych, inne, bezcredentialowe źródło. Wynik trafia do węzła transformującego dane pod kątem zapisu do bazy wektorowej."
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "knowledgebase"
+        },
+        "options": {}
+      },
+      "id": "93d5f531-574e-43ec-abba-5ef7758b492b",
+      "name": "Zapisz w bazie wiedzy (Supabase Vector Store)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "ufPMKLk6xqjRADKV",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "Główny węzeł zapisu do bazy wiedzy — wstawia (insert) dokumenty do tabeli \"knowledgebase\" w Supabase (pgvector), którą użytkownik utworzył wcześniej ręcznym SQL-em (razem z funkcją match_documents, której domyślna nazwa w opcjach tego węzła już pasuje). Potrzebuje dwóch podwęzłów podpiętych osobnymi połączeniami (nie main): embedding (Embeddings OpenAI) i documentLoader (Default Data Loader). Wymaga credentiala typu Supabase API (URL projektu + legacy service_role key) — jeszcze niepodpięty, bo to sekret, który musi dodać użytkownik w UI n8n.\n\nTRUNCATE TABLE knowledgebase;\n\nselect * from knowledgebase;\n"
+    },
+    {
+      "parameters": {
+        "model": "openai/text-embedding-3-small",
+        "options": {}
+      },
+      "id": "9dd0d511-4f90-4364-97c2-902abd7ff113",
+      "name": "Embeddings OpenAI (przez OpenRouter)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        240
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "rUDkKCesiNVPU7r0",
+          "name": "OpenAI account"
+        }
+      },
+      "notes": "Model embeddingowy dla Supabase Vector Store — zamienia tekst z pola content na wektor 1536-wymiarowy (dokładnie tyle, ile ma kolumna embedding vector(1536) w SQL-u). Zamiast łączyć się bezpośrednio z OpenAI (jak w materiale źródłowym), routuje przez OpenRouter: options.baseURL nadpisany na https://openrouter.ai/api/v1, model z prefiksem \"openai/\" wymaganym przez OpenRouter. To świadoma decyzja użytkownika (nie zakłada nowego, płatnego konta OpenAI) — zapisana w pamięci projektu. Wymaga credentiala typu OpenAI (pole API key) zawierającego klucz OpenRouter — typ credentiala musi być \"OpenAI\", bo tego wymaga ten node, ale w środku ląduje klucz OpenRouter. Jeszcze niepodpięty."
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.content }}",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "category",
+                "value": "={{ $json.category }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "806377c4-e01f-4332-9449-de19cece6613",
+      "name": "Przygotuj dokument (Default Data Loader)",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        816,
+        240
+      ],
+      "notes": "Mówi Supabase Vector Store, które dokładnie dane wstawić jako treść dokumentu — tylko pole content z Edit Fields (jsonMode: expressionData), a nie cały JSON wejściowy. Dzielenie tekstu na kawałki zostawione w trybie domyślnym (simple, ~1000 znaków z zakładką) — przy naszych opisach produktów to i tak zwykle jeden kawałek na wiersz. Dodatkowo do metadanych każdego dokumentu trafia pole category (z Edit Fields) — do ewentualnego filtrowania wyników wyszukiwania po kategorii."
+    }
+  ],
+  "connections": {
+    "Uruchom ręcznie": {
+      "main": [
+        [
+          {
+            "node": "Odczytaj produkty (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odczytaj produkty (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "Zmapuj dane produktu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zmapuj dane produktu": {
+      "main": [
+        [
+          {
+            "node": "Zapisz w bazie wiedzy (Supabase Vector Store)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI (przez OpenRouter)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Zapisz w bazie wiedzy (Supabase Vector Store)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Przygotuj dokument (Default Data Loader)": {
+      "ai_document": [
+        [
+          {
+            "node": "Zapisz w bazie wiedzy (Supabase Vector Store)",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "b129556b-6b8c-40c3-bc70-affee21a8416",
+  "activeVersionId": null,
+  "versionCounter": 38,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-03T15:20:10.960Z",
+      "createdAt": "2026-09-03T15:20:10.960Z",
+      "role": "workflow:owner",
+      "workflowId": "G3MpKg9LSv1K2x3J",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

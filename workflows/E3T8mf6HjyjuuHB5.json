@@ -1,0 +1,140 @@
+{
+  "updatedAt": "2026-09-01T13:23:04.148Z",
+  "createdAt": "2026-07-18T09:31:39.763Z",
+  "id": "E3T8mf6HjyjuuHB5",
+  "name": "008 — Document Intelligence: pierwszy workflow testowy (MCP smoke test)",
+  "description": "Pierwszy workflow projektu Document Intelligence Platform. Smoke test ścieżki budowy: n8n MCP Server → n8n, z poziomu Claude Code. Manual Trigger → Edit Fields (Set), bez logiki biznesowej.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a0a3e3fc-0284-4dfd-9928-50b9e47bf07f",
+      "name": "Uruchom test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "project",
+              "value": "Document Intelligence Platform",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "stage",
+              "value": "00 — setup",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "purpose",
+              "value": "Smoke test ścieżki MCP → n8n (budowa workflow z Claude Code)",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "builtVia",
+              "value": "n8n MCP Server",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "builtAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1e6052e-e172-4ade-9f95-f2fd960cd3bd",
+      "name": "Zbuduj payload testowy",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 008 — Smoke test MCP → n8n\nPierwszy workflow projektu Document Intelligence Platform, zbudowany przez serwer MCP z poziomu Claude Code.\n\nManual Trigger → Edit Fields. Zero logiki biznesowej — potwierdza działającą ścieżkę budowy workflow.",
+        "height": 200,
+        "width": 580,
+        "color": 4
+      },
+      "id": "f1a1e76b-1b8c-48b2-998b-5287102b2763",
+      "name": "Sticky Note 124d9e0f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        128,
+        64
+      ]
+    }
+  ],
+  "connections": {
+    "Uruchom test": {
+      "main": [
+        [
+          {
+            "node": "Zbuduj payload testowy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "bba9ee1a-6d45-4427-befa-2438b792e2d0",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-18T09:31:39.765Z",
+      "createdAt": "2026-07-18T09:31:39.765Z",
+      "role": "workflow:owner",
+      "workflowId": "E3T8mf6HjyjuuHB5",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

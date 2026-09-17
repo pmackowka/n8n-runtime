@@ -1,0 +1,449 @@
+{
+  "updatedAt": "2026-09-05T06:37:03.797Z",
+  "createdAt": "2026-09-04T16:33:33.626Z",
+  "id": "LbEgCe2bPsz9BlUH",
+  "name": "021 — Ekstrakcja tekstu z PDF z Google Drive i powiadomienie (Google Drive Trigger, Extract from File, Pushover)",
+  "description": "Google Drive Trigger → Pobierz plik → Extract from File (operacja pdf) → Pushover z wyodrębnionym tekstem jako wiadomość. Placeholder na Google Drive OAuth2 (folder i credential), Pushover realnie skonfigurowany.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "c0b7fa73-8227-44bc-b893-8372df67214f",
+      "name": "Nowy plik w Amplify File Drop",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Węzeł startowy (trigger) tego workflow — odpytuje Google Drive co minutę i uruchamia przepływ, gdy w obserwowanym folderze pojawi się nowy plik (event fileCreated). Docelowo ma nasłuchiwać na folder Amplify File Drop, ale pole folderToWatch jest na razie puste (placeholder) — brakuje jeszcze skonfigurowanego credentiala Google Drive OAuth2 w tej instancji, więc trigger nie zadziała, dopóki nie przejdziesz przez pełną konfigurację OAuth2 w Google Cloud Console i nie wskażesz konkretnego folderu. Metadane nowego pliku (w tym pole id) trafiają dalej do węzła Pobierz plik. To pierwsza w tej instancji klasyczna automatyzacja plikowa bez udziału AI Agenta."
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {}
+      },
+      "id": "ea3f0221-7923-4e3b-afcc-d809ee193ae5",
+      "name": "Pobierz plik",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Węzeł akcji pobierający zawartość pliku wykrytego przez trigger Nowy plik w Amplify File Drop. Identyfikator pliku pochodzi z wyrażenia {{ $json.id }}, czyli pola id z danych wyjściowych Google Drive Trigger. Pobrane dane binarne trafiają do domyślnego pola data i są przekazywane dalej do węzła Rozpoznaj typ pliku, który kieruje je do właściwej gałęzi ekstrakcji (PDF, CSV lub XLSX) na podstawie typu MIME. Podobnie jak trigger, ten węzeł nie ma jeszcze podłączonego credentiala Google Drive OAuth2 — obie konfiguracje trzeba uzupełnić razem, bo dotyczą tego samego konta Google."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Nowy plik w Amplify File Drop').item.json.mimeType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "application/pdf",
+                    "id": "d77ed940-dba8-4402-bd9a-90b0052e317b"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Nowy plik w Amplify File Drop').item.json.mimeType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "text/csv",
+                    "id": "fa44cbd9-72c9-41ab-90ce-c9f71330bedd"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Nowy plik w Amplify File Drop').item.json.mimeType }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "id": "96893966-c5ec-4804-ba00-619bc11b5ddb"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Inne (nieobsługiwane)"
+        }
+      },
+      "id": "b4f72e2a-db34-4155-8c19-25da4806f1b6",
+      "name": "Rozpoznaj typ pliku",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Rozgałęzia przepływ na podstawie typu MIME pobranego pliku, odczytywanego z {{ $('Nowy plik w Amplify File Drop').item.json.mimeType }} — pole z oryginalnego triggera, bo węzeł Pobierz plik go dalej nie przekazuje. Trzy gałęzie: application/pdf → ekstrakcja PDF, text/csv → ekstrakcja CSV, format Excela (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) → ekstrakcja XLSX. Nierozpoznane typy plików trafiają na czwarte, niepodłączone wyjście fallback (\"Inne\") i są po cichu ignorowane — bez błędu, ale też bez żadnego powiadomienia. To pierwsze w tej instancji rozgałęzienie po typie MIME pliku."
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "id": "2b0dec7d-5457-4360-b0cf-d01406afc66f",
+      "name": "Wyodrębnij tekst z PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        -176
+      ],
+      "notes": "Konwertuje binarne dane pliku PDF na JSON z wyodrębnionym tekstem — operacja pdf. Uruchamia się tylko dla plików z typem MIME application/pdf, wybranych przez węzeł Rozpoznaj typ pliku. Czyta domyślne binarne pole data, a wynikowy tekst trafia do pola text, które wykorzystuje węzeł Ustal wiadomość (PDF) do zbudowania treści powiadomienia. Nie wymaga żadnego credentiala."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "35a6432e-2d54-40a2-a237-172ddde99ba7",
+      "name": "Wyodrębnij dane z CSV",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Konwertuje binarne dane pliku CSV (typ MIME text/csv) na JSON — jeden item na wiersz, nazwy pól z nagłówka (headerRow domyślnie włączone). Czyta domyślne binarne pole data pobrane wcześniej przez węzeł Pobierz plik. Wynik trafia do wspólnego węzła Zbierz wiersze arkusza razem z ewentualnymi wierszami z gałęzi XLSX — obie gałęzie nigdy nie działają jednocześnie w tym samym wykonaniu, bo Rozpoznaj typ pliku wybiera dokładnie jedną z nich. Nie wymaga żadnego credentiala."
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "id": "a9dac93e-0bb5-455c-bb2e-d6cb041fa573",
+      "name": "Wyodrębnij dane z XLSX",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        192
+      ],
+      "notes": "Konwertuje binarne dane pliku Excel (typ MIME application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) na JSON — jeden item na wiersz. Czyta domyślne binarne pole data i domyślną nazwę arkusza z ustawień node'a — nieprzetestowane na realnym pliku, domyślna wartość może nie odpowiadać nazwie pierwszego arkusza w typowym eksporcie z Excela, warto zweryfikować przy pierwszym prawdziwym wykonaniu i w razie potrzeby wpisać właściwą nazwę ręcznie (pole sheetName w opcjach). Wynik trafia do wspólnego węzła Zbierz wiersze arkusza, tak jak gałąź CSV. Nie wymaga żadnego credentiala."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "ce30c7cc-65ba-406d-ad7c-1bb2d039080d",
+      "name": "Zbierz wiersze arkusza",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        896,
+        96
+      ],
+      "notes": "Łączy wszystkie itemy (wiersze) z gałęzi CSV albo XLSX — w danym wykonaniu przychodzą tylko z jednej z nich, nigdy z obu naraz — w jeden pojedynczy item z tablicą w polu data (tryb aggregateAllItemData). Dzięki temu węzeł Ustal wiadomość (arkusz) może policzyć liczbę wierszy przez {{ $json.data.length }}, zamiast wysyłać osobne powiadomienie push dla każdego wiersza z osobna."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "msg-pdf",
+              "name": "message",
+              "value": "={{ 'Nowy PDF: ' + $('Nowy plik w Amplify File Drop').item.json.name + ' — ' + ($json.text.length > 300 ? $json.text.slice(0,300) + '...' : $json.text) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d02fbb1c-cd2b-4909-ad9a-8979ba629ee8",
+      "name": "Ustal wiadomość (PDF)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        896,
+        -176
+      ],
+      "notes": "Buduje ostateczną treść powiadomienia push dla gałęzi PDF — łączy nazwę pliku (pobraną z oryginalnego triggera przez $('Nowy plik w Amplify File Drop')) z fragmentem wyodrębnionego tekstu, przycinanym do 300 znaków, jeśli jest dłuższy. Wynik trafia do pola message, które czyta wspólny węzeł Powiadom o treści pliku (Pushover) — ten sam kształt pola message co w gałęzi arkuszowej, dzięki czemu Pushover może być jednym, współdzielonym węzłem końcowym dla wszystkich trzech typów plików."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "msg-sheet",
+              "name": "message",
+              "value": "={{ 'Nowy plik z danymi: ' + $('Nowy plik w Amplify File Drop').item.json.name + ' — ' + $json.data.length + ' wierszy' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f14770fc-0577-4bbf-9810-1ca622bb8a47",
+      "name": "Ustal wiadomość (arkusz)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1120,
+        96
+      ],
+      "notes": "Buduje treść powiadomienia push dla gałęzi CSV/XLSX — nazwa pliku z oryginalnego triggera plus liczba wierszy policzona przez Zbierz wiersze arkusza. Wynik trafia do pola message, tego samego, którego używa gałąź PDF, dzięki czemu jeden wspólny węzeł Pushover obsługuje wszystkie trzy formaty bez rozgałęziania logiki powiadamiania."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $json.message }}",
+        "priority": 1,
+        "additionalFields": {}
+      },
+      "id": "e65b5b5d-4880-4863-bbc1-8a2612a38749",
+      "name": "Powiadom o treści pliku (Pushover)",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        0
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Węzeł końcowy workflow, wspólny dla wszystkich trzech obsługiwanych typów plików (PDF, CSV, XLSX) — czyta gotową treść z pola message, przygotowaną wcześniej przez Ustal wiadomość (PDF) albo Ustal wiadomość (arkusz), zależnie od tego, która gałąź faktycznie wykonała się w danym uruchomieniu. Korzysta z realnie skonfigurowanego credentiala Pushover account i tego samego User Key, co w workflow 011 i 020 w tej instancji. Priorytet ustawiony na 1 (wysoki), więc powiadomienie ominie tryb cichy telefonu. Pliki innych typów w ogóle tu nie docierają — są ciche pomijane wcześniej przez Rozpoznaj typ pliku."
+    },
+    {
+      "parameters": {
+        "content": "## Google Drive → rozpoznanie typu pliku → ekstrakcja → powiadomienie push\n\nMonitoruje folder Amplify File Drop na Google Drive; nowy plik trafia do węzła Rozpoznaj typ pliku, który po typie MIME kieruje go do jednej z trzech gałęzi ekstrakcji: PDF (tekst), CSV (wiersze) albo XLSX (wiersze) — wynik zawsze ląduje we wspólnym polu message i trafia do jednego, współdzielonego węzła Pushover. Pliki innych typów są po cichu ignorowane (czwarte, niepodłączone wyjście Switcha). **Stan przed uruchomieniem**: oba węzły Google Drive (trigger i pobieranie) mają puste/placeholderowe folderToWatch/credential Google Drive OAuth2 — do uzupełnienia po skonfigurowaniu OAuth2. Gałąź XLSX ma nieprzetestowaną domyślną nazwę arkusza — zweryfikuj przy pierwszym prawdziwym pliku Excel. Pushover jest już w pełni gotowy, z tym samym credentialem i User Key co w innych workflow tej instancji.",
+        "height": 280,
+        "width": 1450,
+        "color": 4
+      },
+      "id": "e7149a01-69b6-4d91-9702-7d66fd78ecfb",
+      "name": "Sticky Note 5ff67352",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        352
+      ]
+    }
+  ],
+  "connections": {
+    "Pobierz plik": {
+      "main": [
+        [
+          {
+            "node": "Rozpoznaj typ pliku",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rozpoznaj typ pliku": {
+      "main": [
+        [
+          {
+            "node": "Wyodrębnij tekst z PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wyodrębnij dane z CSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wyodrębnij dane z XLSX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyodrębnij tekst z PDF": {
+      "main": [
+        [
+          {
+            "node": "Ustal wiadomość (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyodrębnij dane z CSV": {
+      "main": [
+        [
+          {
+            "node": "Zbierz wiersze arkusza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyodrębnij dane z XLSX": {
+      "main": [
+        [
+          {
+            "node": "Zbierz wiersze arkusza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zbierz wiersze arkusza": {
+      "main": [
+        [
+          {
+            "node": "Ustal wiadomość (arkusz)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ustal wiadomość (PDF)": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o treści pliku (Pushover)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ustal wiadomość (arkusz)": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o treści pliku (Pushover)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nowy plik w Amplify File Drop": {
+      "main": [
+        [
+          {
+            "node": "Pobierz plik",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "eeb8370e-3057-4c9b-abda-aea9900cb9e1",
+  "activeVersionId": null,
+  "versionCounter": 7,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-04T16:33:33.627Z",
+      "createdAt": "2026-09-04T16:33:33.627Z",
+      "role": "workflow:owner",
+      "workflowId": "LbEgCe2bPsz9BlUH",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

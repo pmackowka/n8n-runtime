@@ -1,0 +1,144 @@
+{
+  "updatedAt": "2026-09-06T08:21:04.047Z",
+  "createdAt": "2026-09-05T16:22:28.616Z",
+  "id": "a3JjF4zl6FeE6hrl",
+  "name": "024 — Serwer MCP poszukiwania leadów (MCP Server Trigger, Call n8n Workflow Tool)",
+  "description": "MCP Server Trigger wystawia jedno narzędzie: Call n8n Workflow Tool wywołujący workflow 023 (subagent poszukiwania leadów). Pole query jest definiowane przez model (fromAi).",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "description": "Znajduje potencjalnych klientów (leady) sprzedażowe dla podanego zapytania sprzedażowego (branża, lokalizacja, wielkość firmy, stanowisko, liczba leadów). Zwraca do 20 leadów (domyślnie do 10, jeśli liczba nie podana) z imieniem, nazwiskiem, firmą, stanowiskiem, przewidywanym adresem e-mail i uzasadnieniem.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "NfHGoXDEvE1F0KrF",
+          "cachedResultName": "023 — Subagent poszukiwania leadów sprzedażowych (Execute Workflow Trigger, AI Agent, MCP Tools)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', 'Zapytanie opisujące szukanych leadów sprzedażowych - branża, lokalizacja, wielkość firmy, stanowisko, liczba wynikow (maks. 20)') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "5d0e09d6-80ee-46b8-b5f5-07bae3ee20e2",
+      "name": "Subagent poszukiwania leadów",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        336
+      ],
+      "notes": "Narzędzie (ai_tool) podłączone do MCP Server Trigger, opakowujące workflow 023 (Subagent poszukiwania leadów sprzedażowych) jako pojedyncze narzędzie wystawione przez ten serwer MCP.\n\n- description: opisuje klientowi MCP, do czego służy to narzędzie (znajdowanie leadów sprzedażowych na podstawie zapytania, zwraca do 20 wyników z danymi kontaktowymi) — to jedyny opis, na podstawie którego model decyduje, kiedy go wywołać; krótszy, ogólnikowy opis utrudniłby modelowi trafne dopasowanie narzędzia do zapytania użytkownika.\n- source: database — wskazuje istniejący, zapisany w n8n workflow (023) po jego ID; alternatywa parameter pozwoliłaby wkleić kod JSON całego pod-workflow bezpośrednio w ten węzeł, bez trzymania go jako osobnego workflow.\n- workflowId: wskazuje workflow 023 po jego rzeczywistym ID (tryb id); wymaga, żeby workflow 023 był opublikowany, inaczej nie dałoby się go wybrać z listy w trybie list w UI.\n- workflowInputs (mappingMode: defineBelow, pole query): wartość pola query jest definiowana przez model przez $fromAI(...) z opisem podpowiadającym, czego ma dotyczyć zapytanie (branża, lokalizacja, wielkość firmy, stanowisko, liczba wyników); stała wartość tekstowa zamiast $fromAI wysyłałaby zawsze to samo, niezmienne zapytanie do subagenta, niezależnie od tego, o co poprosi użytkownik klienta MCP."
+    },
+    {
+      "parameters": {
+        "content": "## Serwer MCP poszukiwania leadów\n\nWystawia jedno narzędzie klientom MCP: wyszukiwanie potencjalnych leadów sprzedażowych na podstawie opisanego zapytania (branża, lokalizacja, wielkość firmy, stanowisko, liczba wyników). Narzędzie wywołuje workflow 023 (Subagent poszukiwania leadów sprzedażowych), który realnie przeszukuje sieć przez Fire Crawl i szuka firm/osób/e-maili przez Hunter. Do działania wymaga, żeby workflow 023 był opublikowany oraz aktywny — bez tego narzędzie nie zresolwuje docelowego workflow. Do przetestowania: aktywuj ten workflow, otwórz węzeł MCP Server Trigger po adres testowy/produkcyjny i podłącz się nim jako klient MCP, zadając zapytanie w rodzaju „znajdź 10 dyrektorów finansowych w firmach konsultingowych”.",
+        "height": 260,
+        "width": 936,
+        "color": 4
+      },
+      "id": "701449eb-6f51-4d8b-a216-0a5175bab568",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        528
+      ]
+    },
+    {
+      "id": "2240897d-7fbf-43ca-906f-c7c7624bc36c",
+      "name": "MCP Server Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        112
+      ],
+      "parameters": {
+        "path": "poszukiwanie-leadow",
+        "authentication": "headerAuth"
+      },
+      "notes": "Węzeł startowy (trigger) tego workflow — wystawia endpoint serwera MCP, przez który zewnętrzny klient MCP (np. Claude Desktop) może wywołać podłączone tu narzędzia. Jedynym podłączonym narzędziem jest Subagent poszukiwania leadów, wywołujący workflow 023.\n\n- path: poszukiwanie-leadow — segment ścieżki URL tego serwera MCP, widoczny w wygenerowanych adresach testowym i produkcyjnym.\n- authentication: headerAuth — endpoint wymaga customowego nagłówka z tajnym tokenem przy każdym połączeniu klienta MCP; zmienione z none, bo URL jest teraz publicznie dostępny przez tunel ngrok (nie tylko localhost), więc bez uwierzytelnienia mógłby go użyć każdy, kto pozna adres. Wymaga podłączonego credentiala typu Header Auth (nazwa nagłówka + wartość-token) — do czasu jego utworzenia w UI i podłączenia ten node nie przyjmuje jeszcze żadnych realnych połączeń.",
+      "webhookId": "bc247f80-3827-435b-9e09-589200a53c6f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nvKGs65UtNrWKe0P",
+          "name": "MCP Poszukiwanie leadów (Header Auth)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Subagent poszukiwania leadów": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "a3c80b3d-4b94-47fa-8306-3cb504b685c5",
+  "activeVersionId": "a3c80b3d-4b94-47fa-8306-3cb504b685c5",
+  "versionCounter": 8,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-05T16:22:28.623Z",
+      "createdAt": "2026-09-05T16:22:28.623Z",
+      "role": "workflow:owner",
+      "workflowId": "a3JjF4zl6FeE6hrl",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Podpięcie dedykowanego credentiala Header Auth",
+    "description": "Updated nodes: MCP Server Trigger"
+  }
+}

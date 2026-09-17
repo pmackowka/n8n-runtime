@@ -1,0 +1,256 @@
+{
+  "updatedAt": "2026-09-01T16:16:02.575Z",
+  "createdAt": "2026-09-01T11:30:10.745Z",
+  "id": "2GqhBuDLM7gM7qHo",
+  "name": "012 — Asystent Telegram w czacie (Date & Time, OpenRouter)",
+  "description": "Bot Telegram oparty na AI Agent: odbiera wiadomość, odpowiada w tym samym czacie, ma dostęp do narzędzia bieżącej daty. Pamięć per-czat (sessionKey = chat id). Odtworzone z kursu (integracja Telegram, dzień 5 tygodnia 1).",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Konfiguracja bota Telegram\n\nBot: **@nowy_telegram_bot** (nazwa wyświetlana: Mój Asystent n8n), utworzony przez @BotFather. Credential w n8n: typ **Telegram API**, podpięty do obu nodeów Telegram w tym workflow (Trigger i wysyłka odpowiedzi).\n\nJak skonfigurować bota Telegram od zera (referencja):\n\n1. W Telegramie wyszukaj **@BotFather**, otwórz czat.\n2. Wyślij `/newbot` (stała komenda, ta sama w każdym języku).\n3. Podaj nazwę wyświetlaną bota.\n4. Podaj nazwę użytkownika — musi kończyć się na \"bot\".\n5. Skopiuj token API z odpowiedzi BotFathera, bez dodatkowych spacji.\n6. W n8n: utwórz credential typu **Telegram API**, wklej token.\n7. Podepnij credential do obu nodeów Telegram w workflow.\n8. Wyślij `/start` do bota w Telegramie.\n\n**Status: ten workflow nie zadziała** — n8n jest uruchomiony lokalnie na moim komputerze (nie na publicznym serwerze), a Telegram Trigger wymaga publicznego adresu HTTPS do rejestracji webhooka. `localhost:5678` bez HTTPS tego nie spełnia, więc workflow nie da się aktywować bez tunelu (np. ngrok) i zmiennej `WEBHOOK_URL`. Świadomie nieaktywne na razie.",
+        "height": 472,
+        "width": 1552
+      },
+      "id": "29cb72a2-db93-4b67-aea0-413251e88407",
+      "name": "Jak skonfigurować bota w BotFather",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "ca1da95b-8508-449b-820d-780e56c310d4",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "adc164c9-6ec5-456c-967f-a03514b7581f",
+      "credentials": {
+        "telegramApi": {
+          "id": "M5wCKzvsVJa5SepI",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "To węzeł startowy (trigger) całego workflow — nasłuchuje na nowe wiadomości wysyłane do bota @nowy_telegram_bot na Telegramie, w trybie webhook (updates: message). Każda wiadomość użytkownika uruchamia nowe wykonanie i trafia do AI Agent jako pełny obiekt JSON z Telegram Bot API, z którego dalej wyciągane są konkretne pola (m.in. message.text, message.chat.id). Ten workflow wymaga publicznego adresu HTTPS do rejestracji webhooka — na instancji lokalnej (localhost) nie zadziała bez tunelu typu ngrok, co opisuje sąsiednia Sticky Note. Bez tego węzła nie ma jak w ogóle odebrać wiadomości z Telegrama."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {}
+      },
+      "id": "ada2af85-65ce-48a2-b884-1b4a2f259aaf",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        112
+      ],
+      "notes": "Główny węzeł decyzyjny workflow — odpowiada użytkownikowi na Telegramie, opierając się na treści wiadomości wyciągniętej wyrażeniem {{ $json.message.text }} z Telegram Triggera (domyślne promptType='auto' szukałoby nieistniejącego chatInput z Chat Triggera, którego tu nie ma). Korzysta z modelu OpenRouter (gpt-oss-120b) i pamięci Simple Memory do utrzymania kontekstu rozmowy, a także z narzędzia \"Pobierz aktualną datę\", gdy użytkownik o to zapyta. Wynik trafia w polu output do kolejnego węzła, który wysyła go z powrotem na Telegram. To jedyny punkt w workflow, w którym faktycznie generowana jest treść odpowiedzi."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "b894d239-4081-435a-9270-d634576b2cfc",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla AI Agent, podłączony przez OpenRouter z ustawionym modelem openai/gpt-oss-120b — darmowym w warstwie darmowej OpenRoutera, tak samo jak w innych workflow tej instancji (009, 011). Węzeł nie działa samodzielnie, tylko dostarcza agentowi zdolność rozumowania, połączony przez port ai_languageModel, a nie główny przepływ danych. Bez niego AI Agent nie ma czym generować odpowiedzi dla użytkownika Telegrama."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "id": "a3367d1d-8f1b-4665-ab35-44cd47afb13d",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        352,
+        336
+      ],
+      "notes": "Pamięć konwersacyjna typu Buffer Window, skonfigurowana z niestandardowym kluczem sesji (sessionIdType: customKey) ustawionym na chat.id z Telegram Triggera, a nie na wartość domyślną. To celowa poprawka względem podstawowej konfiguracji z kursu: dzięki niej każda osobna rozmowa na Telegramie (każdy chat.id) ma własną, oddzieloną pamięć, zamiast dzielić jedną globalną pamięć między wszystkich piszących do bota. Podłączona do AI Agent przez port ai_memory. Bez tej poprawki bot myliłby kontekst różnych rozmów ze sobą."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5b8fa203-7ee4-449c-8fdb-f3cc94b32957",
+      "name": "Pobierz aktualną datę",
+      "type": "n8n-nodes-base.dateTimeTool",
+      "typeVersion": 2,
+      "position": [
+        480,
+        336
+      ],
+      "notes": "Proste narzędzie Date & Time w trybie getCurrentDate — zwraca agentowi bieżącą datę i godzinę bez żadnej konfiguracji ani credentiali. Agent wywołuje je tylko wtedy, gdy użytkownik na Telegramie zapyta o datę lub godzinę — w pozostałych przypadkach odpowiada bez jego użycia. To ten sam wzorzec narzędzia co w workflow 011 (Pushover), tu podłączony do innego agenta i innego kanału komunikacji."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f60e827c-4b39-4fd1-850b-025202fc6cfc",
+      "name": "Wyślij odpowiedź na Telegramie",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        688,
+        112
+      ],
+      "webhookId": "0e8b0d01-8751-442f-9f9c-d75b7981444c",
+      "credentials": {
+        "telegramApi": {
+          "id": "M5wCKzvsVJa5SepI",
+          "name": "Telegram account"
+        }
+      },
+      "notes": "Węzeł akcji (nie triggera) wysyłający tekstową odpowiedź AI Agenta z powrotem na Telegram, operacją sendMessage. Pole chatId celowo czyta się z Telegram Triggera przez {{ $('Telegram Trigger').item.json.message.chat.id }}, a nie z bezpośredniego poprzednika (AI Agent), bo to Trigger, nie Agent, zna identyfikator rozmowy — inaczej odpowiedź trafiłaby donikąd. Pole text bierze wynik agenta ({{ $json.output }}), a appendAttribution jest wyłączone, żeby wiadomość nie kończyła się dopiskiem o n8n. To ten sam credential Telegram API co w Triggerze — nie trzeba konfigurować go drugi raz."
+    },
+    {
+      "parameters": {
+        "content": "## 012 — Asystent Telegram w czacie\n\nBot AI na Telegramie (@nowy_telegram_bot), który odpowiada na wiadomości i potrafi podać bieżącą datę, z osobną pamięcią konwersacji dla każdego czatu. Napisz coś do bota na Telegramie, żeby przetestować — najpierw wyślij /start, potem zwykłą wiadomość. Model językowy to darmowy openai/gpt-oss-120b przez OpenRouter. Wymaga credentiala Telegram API podpiętego do obu nodeów Telegram (już skonfigurowane — patrz notatka obok). Na tej instancji (localhost, bez HTTPS) workflow nie da się jednak aktywować bez tunelu typu ngrok — szczegóły w sąsiedniej Sticky Note.",
+        "height": 228,
+        "width": 1296
+      },
+      "id": "b7d5486b-f80d-4d20-ae37-aa809a07e36f",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        544
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Wyślij odpowiedź na Telegramie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz aktualną datę": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "e55f28ab-b744-4186-bf28-6316beccf923",
+  "activeVersionId": null,
+  "versionCounter": 20,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-01T11:30:10.747Z",
+      "createdAt": "2026-09-01T11:30:10.747Z",
+      "role": "workflow:owner",
+      "workflowId": "2GqhBuDLM7gM7qHo",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "updatedAt": "2026-09-01T13:23:01.774Z",
+  "createdAt": "2026-08-30T06:50:59.389Z",
+  "id": "pPo5pHkVNCjFjAoh",
+  "name": "009 — Asystent portfela inwestycyjnego w czacie (Marketstack + Google Sheets, OpenRouter)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a5045721-19ff-4db1-8bb0-80fa193361ab",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "1ef4ee7f-2fc4-490a-83ce-e515046169e9",
+      "notes": "To węzeł startowy (trigger) całego workflow — nasłuchuje na wiadomości przychodzące z interfejsu czatu n8n. Aktywuje uruchomienie workflow za każdym razem, gdy użytkownik wyśle wiadomość w oknie chatu. Przekazuje treść wiadomości (chatInput) dalej do węzła AI Agent jako dane wejściowe. Bez tego węzła workflow nie ma sposobu na odebranie zapytania od użytkownika w trybie konwersacyjnym."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "bfdf93be-e97d-459e-a454-0ee0f533b165",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        416,
+        0
+      ],
+      "notes": "Główny węzeł orkiestrujący cały workflow — implementuje agenta AI z biblioteki LangChain, który interpretuje zapytanie użytkownika i decyduje, jakich narzędzi (tools) użyć, by na nie odpowiedzieć. Korzysta z modelu językowego podłączonego przez port ai_languageModel (OpenRouter Chat Model). Ma dostęp do pamięci konwersacji (Simple Memory) oraz trzech narzędzi: pobierania cen z Marketstack, odczytu i aktualizacji arkusza portfela w Google Sheets. Sam decyduje, które z nich wywołać na podstawie treści pytania."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "1aa30224-7f65-432d-8cb7-da2012d255a8",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        224,
+        224
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla AI Agent, podłączony przez OpenRouter — pośrednika dającego dostęp do wielu modeli LLM przez jedno API. Skonfigurowany model to openai/gpt-oss-120b. Węzeł nie działa samodzielnie — pełni rolę \"silnika myślenia\" dla AI Agent, generując odpowiedzi i decyzje o wywołaniu narzędzi. Podłączony jest do agenta przez specjalne połączenie ai_languageModel, a nie przez standardowy przepływ danych main."
+    },
+    {
+      "parameters": {},
+      "id": "b5125707-2438-41bd-934c-d6f01309216e",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        352,
+        224
+      ],
+      "notes": "Węzeł pamięci konwersacyjnej typu Buffer Window — przechowuje ostatnie wymiany wiadomości między użytkownikiem a agentem w ramach jednej sesji czatu. Dzięki niemu AI Agent \"pamięta\" kontekst wcześniejszych pytań i odpowiedzi, zamiast traktować każdą wiadomość jako oderwaną od reszty. Podłączony jest do AI Agent przez port ai_memory, a nie przez główny przepływ danych. Bez tego węzła agent odpowiadałby na każde pytanie \"od zera\", tracąc kontekst rozmowy o portfelu."
+    },
+    {
+      "parameters": {
+        "symbols": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Ticker', ``, 'string') }}",
+        "filters": {
+          "latest": true
+        }
+      },
+      "id": "9b52d5f3-af4e-4ced-98e4-e6f402d9a499",
+      "name": "Get many EoD data in Marketstack",
+      "type": "n8n-nodes-base.marketstackTool",
+      "typeVersion": 1,
+      "position": [
+        480,
+        224
+      ],
+      "credentials": {
+        "marketstackApi": {
+          "id": "qvBsJwbnLHsN32nd",
+          "name": "Marketstack account"
+        }
+      },
+      "notes": "Narzędzie (tool) udostępnione AI Agentowi, które pobiera dane end-of-day (EoD) — czyli dzienne notowania cen — dla wskazanego tickera z serwisu Marketstack. Parametr symbols jest wypełniany dynamicznie przez samego agenta na podstawie treści zapytania użytkownika (mechanizm fromAI w n8n), z filtrem \"latest\" ograniczającym wynik do najnowszej notowanej ceny. Agent wywołuje ten węzeł samodzielnie, gdy użytkownik pyta o aktualną cenę danej spółki. Wynik trafia z powrotem do agenta jako dane do dalszej analizy."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "c0dc239e-db99-48f1-9196-6f6e1eae0171",
+      "name": "Odczytaj arkusz portfela",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        608,
+        224
+      ],
+      "notes": "Narzędzie AI Agenta do odczytu danych z arkusza Google Sheets zawierającego portfel inwestycyjny użytkownika. Agent wywołuje je, gdy potrzebuje sprawdzić aktualny skład portfela, listę posiadanych instrumentów lub zapisane wcześniej ceny. Parametry dokumentu i arkusza (documentId, sheetName) nie są jeszcze uzupełnione — trzeba je skonfigurować, wskazując konkretny plik i zakładkę Google Sheets. Bez tej konfiguracji narzędzie nie będzie w stanie odczytać żadnych danych."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "bea1db3a-33d2-40fc-9f76-10b8bd1516f2",
+      "name": "Zaktualizuj cenę w arkuszu portfela",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        736,
+        224
+      ],
+      "notes": "Narzędzie AI Agenta do aktualizacji (operation: update) danych w arkuszu Google Sheets z portfelem — służy do zapisania nowej ceny instrumentu pobranej wcześniej z Marketstack. Agent wywołuje je po uzyskaniu aktualnej ceny, aby odświeżyć wartość w arkuszu bez ręcznej edycji przez użytkownika. Podobnie jak węzeł odczytu, wymaga uzupełnienia documentId i sheetName, by wskazać właściwy plik i zakładkę. To domyka pętlę: agent czyta portfel, sprawdza cenę na rynku i zapisuje ją z powrotem do arkusza."
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many EoD data in Marketstack": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odczytaj arkusz portfela": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zaktualizuj cenę w arkuszu portfela": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "3f7342ad-3de6-4371-8f54-eab56db16dcf",
+  "activeVersionId": null,
+  "versionCounter": 48,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-08-30T06:50:59.390Z",
+      "createdAt": "2026-08-30T06:50:59.390Z",
+      "role": "workflow:owner",
+      "workflowId": "pPo5pHkVNCjFjAoh",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

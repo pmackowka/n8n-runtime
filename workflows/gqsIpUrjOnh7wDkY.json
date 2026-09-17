@@ -1,0 +1,342 @@
+{
+  "updatedAt": "2026-09-01T13:23:03.733Z",
+  "createdAt": "2026-06-28T15:15:45.698Z",
+  "id": "gqsIpUrjOnh7wDkY",
+  "name": "001 — Query GA4 data with Google Gemini AI in a Slack channel",
+  "description": "Slack bot: zapytania w języku naturalnym o dane GA4. AI Agent (Gemini) interpretuje pytanie, pobiera raport GA4 i odpowiada w wątku Slacka. Odtworzone z szablonu n8n #13038.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "C0AA6U5F095",
+          "cachedResultName": "all-ga4-n8n-llm"
+        },
+        "options": {}
+      },
+      "id": "a9d84cf6-864b-4a3d-b753-2611ed4f85a5",
+      "name": "Slack Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1456,
+        -1968
+      ],
+      "webhookId": "2f097d35-73e9-46e4-9345-7c1f6e1008ab",
+      "notesInFlow": false,
+      "notes": "Trigger całego workflow — nasłuchuje zdarzenia app_mention na wskazanym kanale Slacka. Odpala się wyłącznie, gdy ktoś zawoła bota przez @nazwa; bez wzmianki nic się nie dzieje. To trigger produkcyjny: Slack wysyła zdarzenia na publiczny adres HTTPS, więc przy pracy z localhostu wymaga tunelu (ngrok) i ustawionego WEBHOOK_URL. Przekazuje dalej treść wiadomości, ID kanału oraz znaczniki czasu ts i thread_ts. Te znaczniki zasilają zarówno klucz sesji pamięci, jak i wysyłkę odpowiedzi w wątku."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "32a37711-d394-4ff3-8fb0-b01d1c49e25f",
+              "name": "text",
+              "type": "string",
+              "value": "={{ $json.text.replace(/<@.*?>/g, '').trim() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e805bdaa-efdf-478d-a19e-3ced5250e88a",
+      "name": "Edit Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1232,
+        -1968
+      ],
+      "notesInFlow": false,
+      "notes": "Czyści surowy tekst wiadomości ze Slacka, zanim trafi do agenta. Wyrażeniem regularnym usuwa fragment @mention (np. <@U123>), zostawiając samo pytanie użytkownika. Dzięki temu agent dostaje czysty prompt, a nie tekst zaśmiecony identyfikatorem bota. Wynik zapisuje w polu text, z którego czyta AI Agent. To prosty, ale konieczny krok normalizacji wejścia."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $node[\"Edit Fields\"].json[\"text\"] }}",
+        "options": {
+          "systemMessage": "=### ROLA\nJesteś Senior GA4 Analyst. Masz zakaz szacowania i zmyślania danych.\n\n### CZAS I INTEGRALNOŚĆ DANYCH\n- Dziś jest {{ $now.toFormat('cccc, MMMM dd, yyyy') }}.\n- KRYTYCZNE: Wolno Ci raportować wyłącznie liczby zwrócone przez narzędzie 'Get a report in Google Analytics'. Jeśli narzędzie nie zwróci danych, MUSISZ powiedzieć '0' albo 'Brak danych'. Pod żadnym pozorem nie szacuj liczby.\n\n### REGUŁA DOPASOWANIA SCHEMATU (OBOWIĄZKOWA)\nMasz dostęp do pełnego schematu GA4 API (~300 pozycji). Przed wywołaniem narzędzia wykonaj dopasowanie semantyczne:\n\n1. POZYSKANIE:\n   - Wizyty/Ruch -> sessions\n   - Skąd przyszli -> sessionSource / sessionMedium\n   - Grupy kanałów -> defaultChannelGroup\n   - Leady/Konwersje -> keyEvents\n\n2. ZAANGAŻOWANIE:\n   - Odsłony -> screenPageViews\n   - Wskaźnik zaangażowania -> engagementRate\n   - Czas na stronie -> averageSessionDuration\n   - Odrzucenia -> bounceRate\n\n3. PRZYCHODY I E-COMMERCE:\n   - Sprzedaż/Przychód całkowity -> purchaseRevenue\n   - Przychód z produktów -> grossItemRevenue\n   - Produkty -> itemName, itemId, itemCategory (1-5)\n   - Akcje koszyka -> addToCarts, checkouts\n\n4. POZYCJE SPOZA LISTY:\n   - Jeśli użytkownik prosi o wymiar lub metrykę spoza powyższej listy (np. \"Format reklamy\", \"Język\"), MUSISZ znaleźć dokładną nazwę API w camelCase z oficjalnego schematu (np. adFormat, language).\n\n### WIELE METRYK\n- Narzędzie przyjmuje jedną metrykę i jeden wymiar na wywołanie oraz zwraca maksymalnie 50 wierszy.\n- Jeśli pytanie dotyczy kilku metryk naraz (np. sesje i przychód), wywołaj narzędzie osobno dla każdej metryki i połącz wyniki w jednej odpowiedzi.\n\n### BARIERA WYKONANIA\n- Wywołuj narzędzie wyłącznie z poprawnymi nazwami w camelCase.\n- Jeśli wyślesz nazwę metryki typu \"product_revenue\", zakończy się BŁĘDEM. Użyj \"grossItemRevenue\".\nZawsze podawaj w odpowiedzi użyty zakres dat (start/koniec), żeby uniknąć nieporozumień z użytkownikiem."
+        }
+      },
+      "id": "8f82ddfe-bb66-484f-9779-2c75d271b34b",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -944,
+        -1968
+      ],
+      "notesInFlow": false,
+      "onError": "continueErrorOutput",
+      "notes": "Mózg workflow — orkiestruje całą odpowiedź na pytanie o dane GA4. Dostaje pytanie z Edit Fields, system prompt z twardymi guardrailami, model językowy, pamięć rozmowy i narzędzie GA4, po czym sam decyduje, kiedy sięgnąć po dane. System prompt zakazuje szacowania i zmyślania liczb — agent raportuje wyłącznie to, co zwróci narzędzie, a przy braku danych mówi wprost 0 lub Brak danych. Wymusza też poprawne nazwy metryk w camelCase ze schematu GA4 API oraz mapuje pojęcia z języka naturalnego (np. leady na keyEvents). Gdy pytanie dotyczy kilku metryk naraz, instruowany jest, by wywołać narzędzie wielokrotnie i połączyć wyniki. Trzy sub-węzły (model, pamięć, narzędzie) podłączone są bocznymi portami ai_languageModel, ai_memory i ai_tool. Ma dwa wyjścia: główne prowadzi do wysyłki odpowiedzi, a wyjście błędu do węzła Send error message, więc awaria nie kończy się cichym brakiem reakcji."
+    },
+    {
+      "parameters": {
+        "modelName": "=models/gemini-2.5-flash",
+        "options": {}
+      },
+      "id": "ae83e6bc-6bef-4b34-b67b-0710fec6f8d0",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        -1744
+      ],
+      "notesInFlow": false,
+      "notes": "Model językowy napędzający agenta — rozumie pytanie, planuje wywołania narzędzia GA4 i formułuje finalną odpowiedź dla użytkownika. Podłączony do agenta portem ai_languageModel; bez niego agent nie ma rozumu. Używa modelu gemini-2.5-flash — szybkiego i taniego, wystarczającego do mapowania pojęć na metryki i redakcji krótkiej odpowiedzi. Do tego zadania (interpretacja pytania, jedno lub kilka wywołań narzędzia, zwięzła odpowiedź) cięższy model byłby zbędnym kosztem i opóźnieniem. To jedyny model językowy w tym workflow."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $node[\"Slack Trigger\"].json[\"thread_ts\"] || $node[\"Slack Trigger\"].json[\"ts\"] }}",
+        "contextWindowLength": 10
+      },
+      "id": "c6366296-d242-4ccf-a162-aa06233bbc2e",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -880,
+        -1744
+      ],
+      "notesInFlow": false,
+      "notes": "Krótkoterminowa pamięć rozmowy w oknie ostatnich 10 wiadomości, podłączona do agenta portem ai_memory. Pozwala rozumieć pytania nawiązujące do poprzednich, jak dopytanie o wcześniejszy okres. Klucz sesji ustawiony jest na thread_ts lub ts z triggera, więc pamięć jest izolowana per wątek Slacka. Follow-up zadany w tym samym wątku trafia na ten sam klucz i zachowuje ciągłość, a różne wątki mają rozdzielne konteksty. Ręczne ustawienie klucza jest tu konieczne, bo Slack Trigger — inaczej niż natywny Chat Trigger — nie dostarcza własnej tożsamości rozmowy."
+    },
+    {
+      "parameters": {
+        "propertyId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "521315571"
+        },
+        "dateRange": "custom",
+        "startDate": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', '') }}",
+        "endDate": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', '') }}",
+        "metricsGA4": {
+          "metricValues": [
+            {
+              "listName": "={{ $fromAI(\"metric\", \"Metryka GA4 do pobrania, np. sessions lub activeUsers\") }}",
+              "name": "custom_metric"
+            }
+          ]
+        },
+        "dimensionsGA4": {
+          "dimensionValues": [
+            {
+              "listName": "={{ $fromAI(\"dimension\", \"Wymiar GA4, np. date lub pagePath\") }}"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "id": "70344728-5d2e-49e6-bbfc-69b44e9e812d",
+      "name": "Get a report in Google Analytics",
+      "type": "n8n-nodes-base.googleAnalyticsTool",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        -1744
+      ],
+      "notesInFlow": false,
+      "notes": "Narzędzie agenta do pobierania raportów z GA4 Data API — jedyne źródło prawdy o liczbach w tym workflow. Agent sam wypełnia jego parametry mechanizmem $fromAI: zakres dat, metrykę i wymiar dobiera na podstawie pytania użytkownika. Zwraca realne dane z property GA4, których agent nie ma prawa modyfikować ani estymować. Wynik ograniczony jest do 50 wierszy (returnAll wyłączony), żeby nie zrzucać setek wierszy do kontekstu modelu — mniej tokenów, szybciej i bez efektu lost-in-the-middle. Przyjmuje jedną metrykę i jeden wymiar na wywołanie, więc pytania wielometrykowe agent obsługuje kilkoma wywołaniami. Podłączony do agenta portem ai_tool."
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $node[\"Slack Trigger\"].json[\"channel\"] }}"
+        },
+        "text": "={{ $node[\"AI Agent\"].json[\"output\"] }}",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $node[\"Slack Trigger\"].json[\"ts\"] }}"
+            }
+          }
+        }
+      },
+      "id": "378b3c3c-056e-43c9-a0e5-85b833004671",
+      "name": "Send a message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        -544,
+        -2064
+      ],
+      "webhookId": "01b95abc-5d6c-4d12-8ce7-8c97e3ae9237",
+      "notesInFlow": false,
+      "notes": "Główne wyjście workflow — odsyła odpowiedź agenta z powrotem na Slacka. Publikuje ją jako reply w wątku oryginalnej wiadomości (thread_ts równy ts triggera), nie jako nową wiadomość na kanale. Treść bierze z pola output agenta, a kanał i wątek z triggera. Operuje na resource message i operation post, czyli klasyczna publikacja wiadomości na kanał. Dzięki odpowiedzi w wątku rozmowa z botem pozostaje uporządkowana."
+    },
+    {
+      "parameters": {
+        "content": "## Jak to działa\n\nWorkflow łączy Google Analytics 4 (GA4) ze Slackiem — pytasz o dane swojej strony w języku naturalnym, na dedykowanym kanale Slacka, a bot odpowiada w wątku. Wideo: https://www.youtube.com/watch?v=oWXDc6uASfA\n\n## Kroki konfiguracji\n\n1.  **Slack trigger**: skonfiguruj Slack API w n8n, żeby nasłuchiwał nowych wiadomości na wybranym kanale.\n2.  **Credentials**: podłącz poświadczenia dla Slacka, GA4 i Gemini.\n3.  **System prompt agenta AI**: agent nie może zmyślać ani estymować danych. Gdy GA4 nie zwraca danych — ma to powiedzieć wprost. Mapuje też pojęcia z języka naturalnego na metryki GA4 (np. „leady\" = konwersje w GA4).\n4.  **Odpowiedź na Slacku**: odeślij krótką, naturalną wiadomość jako odpowiedź w wątku — z liczbami i zakresem dat użytym przy pobieraniu danych.",
+        "height": 848,
+        "width": 1440
+      },
+      "id": "2c14de8b-a8a5-4c06-9920-723b050844ed",
+      "name": "Sticky Note cfe96517",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1664,
+        -2448
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $node[\"Slack Trigger\"].json[\"channel\"] }}"
+        },
+        "text": "⚠️ Nie udało się przetworzyć pytania — spróbuj je przeformułować albo zawęzić zakres dat.",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $node[\"Slack Trigger\"].json[\"ts\"] }}"
+            }
+          }
+        }
+      },
+      "id": "e00f057f-c8e0-40c6-a001-7ecc6c0b7980",
+      "name": "Send error message",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        -544,
+        -1872
+      ],
+      "webhookId": "12a492bf-4eb2-4bf0-b9a4-2871b47f1a09",
+      "notesInFlow": false,
+      "notes": "Węzeł obsługi błędu — podłączony do drugiego wyjścia AI Agenta, które aktywuje się tylko przy jego awarii (onError ustawione na continueErrorOutput). Odpala się, gdy agent rzuci błędem, np. przy problemie z API Gemini, przekroczeniu limitu albo błędnej nazwie metryki mimo guardraili. Wrzuca wtedy do tego samego wątku Slacka czytelny komunikat zamiast zostawić użytkownika w ciszy. Bez niego awaria agenta oznaczałaby brak jakiejkolwiek odpowiedzi, co wygląda jak zepsuty bot. Kanał i thread_ts bierze z triggera, tak samo jak główny węzeł wysyłki. To element odporności, nie główna ścieżka wykonania."
+    }
+  ],
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send error message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a report in Google Analytics": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "e0e241a2-013a-4870-a329-20d8a2dc614d",
+  "activeVersionId": null,
+  "versionCounter": 14,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-28T15:15:45.701Z",
+      "createdAt": "2026-06-28T15:15:45.701Z",
+      "role": "workflow:owner",
+      "workflowId": "gqsIpUrjOnh7wDkY",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

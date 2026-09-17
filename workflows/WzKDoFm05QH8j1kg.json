@@ -1,0 +1,443 @@
+{
+  "updatedAt": "2026-09-07T07:08:03.707Z",
+  "createdAt": "2026-09-06T15:27:23.181Z",
+  "id": "WzKDoFm05QH8j1kg",
+  "name": "029 — Subagent rezerwacji demo (Webhook, AI Agent, Google Calendar Tool, Structured Output, Pushover)",
+  "description": "Webhook (POST, responseNode) → AI Agent (OpenRouter) sprawdza dostępność w Google Calendar i rezerwuje demo, zwraca structured output → IF → Pushover + Respond to Webhook na obu gałęziach. Brak zaproszenia trzeciej strony (celowo). Wywoływany jako schedul",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rezerwacja-demo",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1c7429c9-9a99-4ad5-a1d1-c3181c7025bb",
+      "name": "Webhook rezerwacji demo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -64
+      ],
+      "webhookId": "3aee4d41-efc6-49e9-ba98-0c632a06cac7",
+      "notes": "Węzeł startowy tego workflow — nasłuchuje na publicznym adresie webhooka i uruchamia proces rezerwacji demo, gdy przyjdzie żądanie POST z imieniem osoby i preferowanym przedziałem czasowym. Wołany z zewnątrz, docelowo przez agenta głosowego ElevenLabs jako narzędzie schedule_demo_tool.\n\n- httpMethod: POST — żądanie musi przyjść z ciałem JSON (name, timeSlot); GET wymagałby przekazania tych danych przez parametry URL.\n- path: rezerwacja-demo — segment ścieżki w publicznym adresie webhooka; zmiana tej wartości zmieniłaby adres, pod którym trzeba by przekonfigurować narzędzie w ElevenLabs.\n- authentication: none — endpoint przyjmuje żądania bez uwierzytelnienia; headerAuth dodałby wymóg tajnego nagłówka, sensowny gdyby adres mógł wpaść w niepowołane ręce.\n- responseMode: responseNode — czeka na węzeł Respond to Webhook dalej w łańcuchu i zwraca jego treść jako odpowiedź; onReceived (użyty w workflow 028) odpowiedziałby natychmiast bez czekania na wynik — tu jest to niewystarczające, bo wołający agent głosowy potrzebuje faktycznego wyniku rezerwacji, żeby kontynuować rozmowę z klientem."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Zarezerwuj demo z {{ $json.body.name }} w tym przedziale czasowym: {{ $json.body.timeSlot }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Otrzymujesz dane osoby, ktora chcialaby otrzymac demo produktu, oraz preferowany przez nia przedzial czasowy. Uzyj narzedzia sprawdzania dostepnosci kalendarza, a nastepnie zarezerwuj demo w kalendarzu za pomoca drugiego narzedzia. Nie zapraszaj tej osoby jako uczestnika wydarzenia w kalendarzu - zaproszenie trzeciej strony to krok wykonywany recznie pozniej przez czlowieka. Odpowiedz, podajac wynik."
+        }
+      },
+      "id": "89487188-47a9-4b2f-b84d-844296044d15",
+      "name": "Silnik rezerwacji demo",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        -64
+      ],
+      "notes": "AI Agent, który na podstawie imienia osoby i preferowanego przedziału czasowego sprawdza dostępność kalendarza i rezerwuje demo, zwracając ustrukturyzowany wynik do dalszego przetwarzania przez węzeł IF.\n\n- promptType: define — prompt pochodzi wprost z wyrażenia w polu text, nie z domyślnego auto (który czytałby chatInput z Chat Triggera); wymagane, bo trigger to Webhook.\n- text: łączy {{ $json.body.name }} i {{ $json.body.timeSlot }} w jedno zdanie-polecenie; stały tekst uniemożliwiłby obsługę różnych osób i terminów przy każdym wywołaniu.\n- options.systemMessage — jawnie zakazuje zapraszania tej osoby jako uczestnika wydarzenia w kalendarzu, obok samego pominięcia pola attendees w narzędziu tworzącym wydarzenie; podwójne zabezpieczenie (prompt + brak pola) zmniejsza ryzyko, że model sam doda zaproszenie inną drogą.\n- hasOutputParser: true wraz z podłączonym Structured Output Parser — wymusza zwrócenie stałego kształtu JSON (success/summary) zamiast dowolnego tekstu, dzięki czemu węzeł IF może niezawodnie sprawdzić wynik."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "fb91522e-ada7-4a4d-8c6d-c96c42a321b0",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        176
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik rezerwacji demo — interpretuje żądanie, decyduje kiedy wywołać które z dwóch narzędzi kalendarza i wypełnia pola wymuszone przez Structured Output Parser.\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy); płatny model, np. openai/gpt-5.2 sugerowany w materiale źródłowym, wymagałby płatnego konta OpenRouter i nie zadziała tutaj.\n- credentials.openRouterApi: podłączony credential OpenRouter account — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter."
+    },
+    {
+      "parameters": {
+        "resource": "calendar",
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "timeMin": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('startTime', 'Poczatek przedzialu czasowego do sprawdzenia dostepnosci, w formacie ISO') }}",
+        "timeMax": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('endTime', 'Koniec przedzialu czasowego do sprawdzenia dostepnosci, w formacie ISO') }}",
+        "options": {}
+      },
+      "id": "eba7515e-a869-4570-bde7-16a5400874c6",
+      "name": "Sprawdz dostepnosc kalendarza",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        176
+      ],
+      "notes": "Pierwsze z dwóch narzędzi (subnode ai_tool) — sprawdza, czy podany przedział czasowy jest wolny w kalendarzu, bez ujawniania modelowi treści innych wydarzeń — celowa ochrona prywatności (agent widzi tylko true/false, nie szczegóły spotkań).\n\n- resource/operation: calendar/availability — zwraca wyłącznie dostępność (pole available: true/false); operacja event/getAll (użyta gdzie indziej do innego celu) zwróciłaby zamiast tego pełne szczegóły wydarzeń, czego celowo unikamy.\n- calendar: puste (placeholder, tryb list) — docelowo ma wskazywać realny kalendarz Google użytkownika; wymaga podłączonego credentiala Google Calendar OAuth2, którego jeszcze nie ma w tej instancji.\n- timeMin/timeMax: $fromAI(startTime/endTime, ...) — model sam wylicza początek i koniec sprawdzanego przedziału na podstawie przedziału czasowego podanego przez rozmówcę; stałe wartości uniemożliwiłyby sprawdzanie różnych terminów przy różnych żądaniach."
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('startTime', 'Czas rozpoczecia demo, w formacie ISO') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('endTime', 'Czas zakonczenia demo, w formacie ISO') }}",
+        "additionalFields": {
+          "description": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('description', 'Opis wydarzenia - krotkie podsumowanie tego, czego dotyczy demo') }}",
+          "location": "https://zoom.us/j/ABCDEFGHIJ",
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('summary', 'Krotki tytul wydarzenia opisujacy demo, np. Demo AI Accounting z <imie klienta>') }}"
+        }
+      },
+      "id": "dd4ccd3a-e784-4304-b8ae-d3d22ea3da24",
+      "name": "Utworz wydarzenie w kalendarzu",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        496,
+        176
+      ],
+      "notes": "Drugie z dwóch narzędzi (subnode ai_tool) — tworzy w kalendarzu Google wydarzenie reprezentujące zarezerwowane demo, wywoływane dopiero po potwierdzeniu dostępności przez pierwsze narzędzie.\n\n- resource/operation: event/create — tworzy nowe wydarzenie; brak pola attendees w konfiguracji tego węzła jest celowy — nie zapraszamy automatycznie trzeciej strony (klienta) do wydarzenia, żeby uniknąć ryzyka masowego, niekontrolowanego wysyłania zaproszeń (patrz system message agenta).\n- calendar: puste (placeholder, tryb list) — jak w narzędziu dostępności, wymaga tego samego jeszcze niepodłączonego credentiala Google Calendar OAuth2.\n- start/end: $fromAI(startTime/endTime, ...) — model ustawia faktyczne godziny wydarzenia na podstawie potwierdzonej dostępności.\n- additionalFields.summary/description: $fromAI(...) — tytuł i opis wydarzenia generowane przez model na podstawie kontekstu rozmowy.\n- additionalFields.location: stały tekst https://zoom.us/j/ABCDEFGHIJ — przykładowy, zaszyty na sztywno link do spotkania; w realnym użyciu należałoby podmienić go na prawdziwy, stały link Zoom/Meet użytkownika."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"success\": true, \"summary\": \"Zarezerwowano demo z Tomem Jonesem 5 stycznia 2026 o 14:00 czasu wschodniego.\" }"
+      },
+      "id": "0f73c477-81f0-4d57-8c98-11214a6e3f56",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        176
+      ],
+      "notes": "Subnode outputParser wymuszający na agencie zwrócenie JSON-a zgodnego z zadanym schematem zamiast dowolnego tekstu.\n\n- jsonSchemaExample: przykładowy JSON z polami success (czy rezerwacja się powiodła) i summary (opis wyniku) — na jego podstawie n8n generuje wymuszany schemat wyjścia; rozszerzenie przykładu o dodatkowe pole, np. eventLink, automatycznie dodałoby je do wymuszanego schematu."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.success }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4c8879b-7846-4ddb-94dc-aa74e6ce33a7",
+      "name": "Sprawdz sukces",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        -64
+      ],
+      "notes": "Rozdziela dalszy przebieg workflow na dwie gałęzie w zależności od tego, czy agentowi udało się zarezerwować demo.\n\n- conditions: jeden warunek typu boolean na polu {{ $json.output.success }} z operacją true — sprawdza wartość logiczną wprost, a nie tekstowe porównanie do słowa \"true\"; to rozróżnienie było źródłem błędu poprawianego w analogicznych węzłach w workflow 027 i 028, tutaj zastosowane poprawnie od razu.\n- combinator: and — nieistotne przy jednym warunku, ale wymagane strukturalnie."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $json.output.summary }}",
+        "priority": 0,
+        "additionalFields": {
+          "title": "Account Executive: demo zarezerwowane"
+        }
+      },
+      "id": "46e9a335-21e2-4556-9034-367aa8f00588",
+      "name": "Powiadom o rezerwacji",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -160
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Wysyła powiadomienie push po pomyślnej rezerwacji demo, zanim workflow odpowie wołającemu przez Respond to Webhook.\n\n- userKey: identyfikator konta Pushover użytkownika, ten sam co w workflow 011/020/028 — bez niego powiadomienie trafiłoby donikąd.\n- message: {{ $json.output.summary }} — treść powiadomienia to dokładnie podsumowanie wygenerowane przez agenta, więc automatycznie zawiera imię osoby i termin.\n- priority: 0 (normalny) — zwykłe powiadomienie; 1 (wysoki) użyty w gałęzi niepowodzenia niżej, żeby błędy były trudniejsze do przeoczenia.\n- additionalFields.title: \"Account Executive: demo zarezerwowane\" — nagłówek widoczny od razu na ekranie blokady telefonu."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output.summary }}",
+        "options": {}
+      },
+      "id": "00c0dd19-4013-46b8-aeea-0bc7ba23163d",
+      "name": "Odpowiedz sukcesem",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1264,
+        -160
+      ],
+      "notes": "Kończy przebieg na gałęzi sukcesu, odsyłając do wołającego webhooka treść podsumowania jako zwykły tekst — dopiero ten węzeł faktycznie zwraca odpowiedź HTTP, bo trigger ma responseMode ustawiony na responseNode.\n\n- respondWith: text — odpowiedź to zwykły tekst, czytelny wprost przez rozmówcę agenta głosowego; json zwróciłby zamiast tego ustrukturyzowany obiekt, przydatny gdyby wołający system miał dalej programowo przetwarzać wynik zamiast tylko go odczytać.\n- responseBody: {{ $json.output.summary }} — treść odpowiedzi to to samo podsumowanie, które trafiło też do powiadomienia push."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $json.output.summary }}",
+        "priority": 1,
+        "additionalFields": {
+          "title": "Account Executive: rezerwacja demo nieudana"
+        }
+      },
+      "id": "e655b731-cea8-4836-9c9e-3c132ab8cbde",
+      "name": "Powiadom o niepowodzeniu",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        32
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Wysyła powiadomienie push, gdy nie udało się zarezerwować demo — jedyny ślad tego w kanale push, oprócz treści samej odpowiedzi HTTP.\n\n- message: {{ $json.output.summary }} — treść powiadomienia to podsumowanie wygenerowane przez agenta, opisujące dlaczego rezerwacja się nie powiodła.\n- priority: 1 (wysoki) — pomija tryb cichy telefonu, bo to sygnał błędu wymagający uwagi, w przeciwieństwie do priority 0 na gałęzi sukcesu.\n- additionalFields.title: \"Account Executive: rezerwacja demo nieudana\" — pozwala od razu odróżnić ten przypadek od pomyślnej rezerwacji w liście powiadomień."
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output.summary }}",
+        "options": {}
+      },
+      "id": "e9031113-755b-4dbd-a041-1cd2b4b7c36c",
+      "name": "Odpowiedz niepowodzeniem",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1264,
+        32
+      ],
+      "notes": "Kończy przebieg na gałęzi niepowodzenia, odsyłając do wołającego webhooka treść podsumowania jako zwykły tekst — analogicznie do węzła Odpowiedz sukcesem, tylko na przeciwnej gałęzi IF.\n\n- respondWith: text — spójne z gałęzią sukcesu, żeby wołający zawsze dostawał ten sam format odpowiedzi niezależnie od wyniku.\n- responseBody: {{ $json.output.summary }} — treść odpowiedzi to podsumowanie wyjaśniające, dlaczego rezerwacja się nie powiodła (np. brak dostępności w podanym terminie)."
+    },
+    {
+      "parameters": {
+        "content": "## Subagent rezerwacji demo\n\nWebhook (POST) uruchamia ten workflow, gdy przyjdzie żądanie z imieniem osoby i preferowanym przedziałem czasowym na demo — docelowo wywoływany przez agenta głosowego ElevenLabs (Account Executive) jako narzędzie schedule_demo_tool. AI Agent (OpenRouter) sprawdza dostępność w Google Calendar (widząc tylko true/false, nie treść innych wydarzeń) i rezerwuje demo, celowo NIE zapraszając rozmówcy jako uczestnika wydarzenia — to krok ręczny dla człowieka. Structured output (success/summary) trafia do IF, który na obu gałęziach wysyła powiadomienie push i odpowiada wołającemu przez Respond to Webhook treścią podsumowania — w przeciwieństwie do workflow 028, tu odpowiedź czeka na faktyczny wynik, bo rozmówca potrzebuje go, żeby kontynuować rozmowę. Żeby przetestować: wyślij POST na Production URL z ciałem {\"name\": ..., \"timeSlot\": ...} i sprawdź kalendarz, telefon oraz treść odpowiedzi HTTP. Wymaga podłączonego credentiala Google Calendar OAuth2, którego jeszcze nie ma w tej instancji — oba narzędzia kalendarza są bez credentiala i z pustym polem calendar.",
+        "height": 256,
+        "width": 1300,
+        "color": 4
+      },
+      "id": "3e1121a7-13f2-4f9a-be8a-726969f1af08",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**✅ Demo zarezerwowane** → push + odpowiedź do rozmówcy z podsumowaniem",
+        "height": 80,
+        "width": 320,
+        "color": 4
+      },
+      "id": "3466c802-9dc1-44d4-b110-132c43ebda46",
+      "name": "Etykieta: sukces",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**❌ Rezerwacja nieudana** → push + odpowiedź z powodem niepowodzenia",
+        "height": 80,
+        "width": 320,
+        "color": 4
+      },
+      "id": "1cd8c0b0-d918-41b4-9a2e-93aeb426dc0b",
+      "name": "Etykieta: niepowodzenie",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        176
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook rezerwacji demo": {
+      "main": [
+        [
+          {
+            "node": "Silnik rezerwacji demo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Silnik rezerwacji demo": {
+      "main": [
+        [
+          {
+            "node": "Sprawdz sukces",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik rezerwacji demo",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdz dostepnosc kalendarza": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik rezerwacji demo",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Utworz wydarzenie w kalendarzu": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik rezerwacji demo",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Silnik rezerwacji demo",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdz sukces": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o rezerwacji",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Powiadom o niepowodzeniu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Powiadom o rezerwacji": {
+      "main": [
+        [
+          {
+            "node": "Odpowiedz sukcesem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Powiadom o niepowodzeniu": {
+      "main": [
+        [
+          {
+            "node": "Odpowiedz niepowodzeniem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "dd2d25d6-cdd6-49e6-b132-f1bada4d8c51",
+  "activeVersionId": null,
+  "versionCounter": 5,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-06T15:27:23.182Z",
+      "createdAt": "2026-09-06T15:27:23.182Z",
+      "role": "workflow:owner",
+      "workflowId": "WzKDoFm05QH8j1kg",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

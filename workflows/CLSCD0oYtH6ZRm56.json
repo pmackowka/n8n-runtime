@@ -1,0 +1,245 @@
+{
+  "updatedAt": "2026-09-04T12:10:27.224Z",
+  "createdAt": "2026-09-04T08:41:55.814Z",
+  "id": "CLSCD0oYtH6ZRm56",
+  "name": "019 — Agent RAG jako narzędzie ElevenLabs (Webhook, AI Agent, OpenRouter, Supabase Vector Store)",
+  "description": "Webhook (POST) → AI Agent (OpenRouter openai/gpt-oss-120b, narzędzie Supabase Vector Store, bez pamięci) → Respond to Webhook. Bezstanowe narzędzie dla agenta głosowego ElevenLabs, pytanie w body.question. Aktywny, produkcyjny webhook przez ngrok.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b9619933-3b9e-465f-995d-99c046937f7c",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0b4e6d64-d1f7-43c0-9664-fce205055d70",
+      "name": "Webhook (wejście z ElevenLabs)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "b9619933-3b9e-465f-995d-99c046937f7c"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.question }}",
+        "options": {
+          "systemMessage": "Jesteś ekspertem produktowym sklepu internetowego sprzedającego elektronikę komputerową i akcesoria komputerowe. Odpowiadasz na pytania przekazywane przez agenta głosowego ElevenLabs — Twoja odpowiedź zostanie odczytana na głos, więc pisz krótko, naturalnym językiem mówionym, bez tabel, list punktowanych, markdown ani nagłówków.\n\nZawsze, gdy pytanie dotyczy oferty, dostępności, cen lub szczegółów produktów, użyj narzędzia do przeszukiwania bazy wiedzy, żeby znaleźć odpowiedź — nie zgaduj i nie odpowiadaj z własnej ogólnej wiedzy. Jeśli baza wiedzy nie zawiera odpowiedzi na pytanie, powiedz to wprost, zamiast wymyślać informacje.\n\nOdpowiadaj zwięźle — maksymalnie 2-3 zdania, chyba że pytanie wymaga wymienienia kilku konkretnych produktów."
+        }
+      },
+      "id": "a51195d4-d88d-4aaa-8766-ba88dc0ecb4d",
+      "name": "Agent odpowiadający na pytania",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        112
+      ],
+      "notes": "Właściwy mózg tego workflow — czyta treść pytania bezpośrednio wyrażeniem {{ $json.body.question }} (promptType: define), bo nie ma tu Chat Triggera, tylko Webhook, który nie podaje pola chatInput automatycznie. Ma podpięte trzy podwęzły: model językowy (OpenRouter), pamięć krótkoterminową ostatnich wypowiedzi i narzędzie do przeszukiwania bazy wiedzy Supabase, po które sięga, gdy pytanie dotyczy oferty produktowej. Wynik trafia do \"Odpowiedz do webhooka\", które odsyła go jako odpowiedź HTTP. Pole options.systemMessage jest obecnie puste — agent działa na ogólnej, domyślnej instrukcji, bez opisu roli eksperta produktowego ani wskazania, kiedy dokładnie używać narzędzia."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "f464bfe3-888a-4b0b-9505-013691b85b4a",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        352
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy zasilający Agenta — openai/gpt-oss-120b przez OpenRouter, jedyny model potwierdzony jako działający na tym koncie (płatne modele OpenRouter tu zawodzą). Podłączony połączeniem ai_languageModel, więc obsługuje zarówno rozumienie pytania z webhooka, jak i decyzję o wywołaniu narzędzia bazy wiedzy. Korzysta z credentiala \"OpenRouter account\", współdzielonego z innymi workflow w tej instancji. Parametry generowania (temperatura, maxTokens) zostawione na wartościach domyślnych node'a."
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Użyj tego narzędzia, aby wyszukać informacje o produktach oferowanych przez firmę.",
+        "tableName": {
+          "__rl": true,
+          "mode": "id",
+          "value": "knowledgebase"
+        },
+        "topK": 3,
+        "options": {}
+      },
+      "id": "6c8c00ab-d226-43e4-8fbb-0ccb53997289",
+      "name": "search_product_knowledge_base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        496,
+        352
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "ufPMKLk6xqjRADKV",
+          "name": "Supabase account"
+        }
+      },
+      "notes": "Narzędzie RAG udostępnione Agentowi (mode: retrieve-as-tool, połączenie ai_tool) — przeszukuje tabelę knowledgebase w Supabase (pgvector) i zwraca do 3 najbliższych semantycznie dokumentów (topK: 3, obniżone ręcznie z domyślnych 10 podczas testów). Metadane dokumentów (pole category) są dołączane do wyniku, reranking wyłączony — działa na czystym podobieństwie wektorowym. Opis narzędzia jest celowo ogólny — mówi Agentowi, że służy do wyszukiwania informacji o produktach firmy, bez odwołań do konkretnej branży. Wymaga podwęzła embeddingowego (\"Embeddings OpenAI\") do zamiany pytania użytkownika na wektor przed porównaniem."
+    },
+    {
+      "parameters": {
+        "model": "openai/text-embedding-3-small",
+        "options": {}
+      },
+      "id": "5dafbc1a-6d9c-4ebd-9e05-e9f121d20e4d",
+      "name": "Embeddings OpenAI (przez OpenRouter)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        576,
+        560
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "rUDkKCesiNVPU7r0",
+          "name": "OpenAI account"
+        }
+      },
+      "notes": "Model embeddingowy dla narzędzia Supabase Vector Store — zamienia pytanie użytkownika na wektor 1536-wymiarowy modelem text-embedding-3-small, tym samym, którym zwektoryzowano dane w workflow 018 (spójność wymiarów jest konieczna do trafnego porównania). Routuje przez OpenRouter: credential \"OpenAI account\" ma nadpisany Base URL na openrouter.ai/api/v1, a nazwa modelu niesie wymagany przez OpenRouter prefiks \"openai/\". Podłączony do \"Przeszukaj bazę wiedzy\" połączeniem ai_embedding — bez niego narzędzie nie umiałoby dopasować pytania do zapisanych dokumentów."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "050b1142-b9c6-497c-a613-3c1c58458748",
+      "name": "Odpowiedz do webhooka",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        528,
+        112
+      ],
+      "notes": "Ostatni węzeł łańcucha — wysyła odpowiedź HTTP z powrotem do wywołującego (agenta głosowego ElevenLabs), zamykając żądanie, które Webhook celowo zostawił otwarte (responseMode: responseNode). Ustawienia domyślne (respondWith: firstIncomingItem) oznaczają, że zwraca dokładnie to, co wyprodukował \"Agent odpowiadający na pytania\" — czyli JSON z polem output zawierającym tekst odpowiedzi. Nie wymaga żadnej konfiguracji ani credentiali."
+    },
+    {
+      "parameters": {
+        "content": "## Agent RAG jako narzędzie ElevenLabs\n\nWebhook (POST) → Agent AI (OpenRouter, pamięć, narzędzie Supabase Vector Store) → Respond to Webhook — backend wywoływany przez narzędzie webhookowe agenta głosowego ElevenLabs, nie przez czat n8n. Oczekuje w ciele żądania pola `question`, odpowiada JSON-em z polem `output`.\n\n**Jak przetestować:** wyślij POST z `{\"question\": \"...\"}` na adres z węzła Webhook — test URL wymaga kliknięcia „Listen for test event”, produkcyjny wymaga aktywacji workflow i publicznego adresu (obecnie tunel ngrok pod zmienną `WEBHOOK_URL`).\n\n**Do domknięcia przed produkcją:** brak system message na Agencie i brak session key w pamięci rozmowy (webhook nie niesie identyfikatora sesji).",
+        "height": 300,
+        "width": 1130,
+        "color": 4
+      },
+      "id": "1a36b09c-d522-4f75-867a-e247643e6138",
+      "name": "Sticky Note - Podsumowanie",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        688
+      ]
+    }
+  ],
+  "connections": {
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent odpowiadający na pytania",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI (przez OpenRouter)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "search_product_knowledge_base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (wejście z ElevenLabs)": {
+      "main": [
+        [
+          {
+            "node": "Agent odpowiadający na pytania",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent odpowiadający na pytania": {
+      "main": [
+        [
+          {
+            "node": "Odpowiedz do webhooka",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_product_knowledge_base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent odpowiadający na pytania",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "7cc0c8b1-11c9-4da7-959a-8c085c50fb7a",
+  "activeVersionId": "b1d1305a-76bf-40e5-a1da-541925cd34d7",
+  "versionCounter": 15,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-04T08:41:55.815Z",
+      "createdAt": "2026-09-04T08:41:55.815Z",
+      "role": "workflow:owner",
+      "workflowId": "CLSCD0oYtH6ZRm56",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Zmiana nazwy narzędzia na format bezpieczny dla function-calling",
+    "description": "Podejrzenie: nazwa nodu ze spacjami, polskimi znakami i nawiasami (\"Przeszukaj bazę wiedzy (Supabase Vector Store)\") jest sanityzowana/ucinana przy przekazywaniu do modelu jako nazwa funkcji, co łamie mapowanie wywołania narzędzia z powrotem na node — model czasem poprawnie prosi o narzędzie, ale n8n nie odnajduje go pod przekształconą nazwą i zwraca pustą odpowiedź. Nazwa zmieniona na ASCII snake_case bez spacji/nawiasów/diakrytyków."
+  }
+}

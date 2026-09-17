@@ -1,0 +1,254 @@
+{
+  "updatedAt": "2026-09-06T08:53:29.146Z",
+  "createdAt": "2026-09-05T13:03:29.085Z",
+  "id": "NfHGoXDEvE1F0KrF",
+  "name": "023 — Subagent poszukiwania leadów sprzedażowych (Execute Workflow Trigger, AI Agent, MCP Tools)",
+  "description": "Execute Workflow Trigger (pole query) → AI Agent (OpenRouter, Fire Crawl + Hunter MCP) → Structured Output Parser. Wywoływany jako narzędzie Call n8n Workflow Tool przez serwer MCP poszukiwania leadów (024). Bezstanowy.",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Subagent poszukiwania leadów sprzedażowych\n\nExecute Workflow Trigger uruchamia ten workflow z jednym polem wejściowym: query (zapytanie sprzedażowe, np. branża, lokalizacja, wielkość firmy, stanowisko, liczba leadów). AI Agent (OpenRouter, openai/gpt-oss-120b) korzysta z dwóch narzędzi MCP — Fire Crawl (przeszukiwanie i scrapowanie stron) oraz Hunter (wyszukiwanie firm, osób i adresów e-mail) — a wynik wymusza na schemat { prospects: [{ firstName, lastName, company, role, email, reasoning }] } przez Structured Output Parser. System prompt honoruje liczbę leadów podaną w zapytaniu (maks. 20, domyślnie do 10) i zakazuje wymyślania danych, żeby dobić do liczby. Workflow jest bezstanowy — bez pamięci konwersacji, każde wywołanie liczy się od zera.\n\nTen workflow nie jest uruchamiany bezpośrednio przez użytkownika — służy jako podagent, wywoływany przez inny workflow (Execute Sub-workflow) albo jako narzędzie Call n8n Workflow Tool podłączone do serwera MCP poszukiwania leadów (workflow 024). Musi być opublikowany, żeby dało się go wybrać z listy w takim narzędziu.",
+        "height": 314,
+        "width": 1228,
+        "color": 4
+      },
+      "id": "54842a9c-dbea-4129-bec6-8e13706a963d",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            }
+          ]
+        }
+      },
+      "id": "f5b4a4c6-65eb-4e12-bd02-4e444846fdcf",
+      "name": "Uruchomiony przez inny workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Węzeł startowy tego workflow — uruchamia go, gdy zostanie wywołany przez inny workflow (Execute Sub-workflow) albo przez narzędzie Call n8n Workflow Tool z serwera MCP poszukiwania leadów (workflow 024). Przekazane dane trafiają jako wejście do węzła Silnik wyszukiwania leadów.\n\n- inputSource: workflowInputs — wymusza zdefiniowanie konkretnych pól wejściowych zamiast przyjmowania dowolnego JSON-a; alternatywa jsonExample pozwoliłaby zdefiniować oczekiwany kształt przez przykładowy JSON, a passthrough przepuściłby cały obiekt wejściowy bez żadnej walidacji pól.\n- workflowInputs.values: jedno pole query typu string — to jedyne dane, jakich oczekuje ten workflow od wywołującego; dodanie np. drugiego pola maxResults (number) pozwoliłoby wywołującemu jawnie sterować limitem liczby leadów, zamiast polegać wyłącznie na tym, co agent wyczyta z treści zapytania."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Znajdujesz potencjalnych klientów (leady) sprzedażowe. Na podstawie konkretnego zapytania użytkownika korzystasz ze swoich narzędzi, żeby przeszukiwać internet i scrapować strony internetowe, kiedy to potrzebne, w celu znalezienia potencjalnych klientów spełniających podane kryteria (branża, lokalizacja, wielkość firmy, stanowisko itd.), oraz używasz swoich narzędzi, żeby znaleźć najbardziej prawdopodobny adres e-mail sprzedażowy każdego z nich.\n\nStanowisko musi realnie odpowiadać temu, o co poprosił użytkownik — jeśli użytkownik prosi o \"dyrektora\", liczy się faktyczny szczebel dyrektorski/kierowniczy wyższego szczebla, nie specjalista, koordynator ani junior. Jeśli w danej firmie nie znajdziesz nikogo na żądanym poziomie stanowiska, POMIŃ tę firmę — nie podstawiaj niżej postawionej osoby jako \"zbliżony\" kontakt czy \"proxy\", nawet jeśli jest realna i zweryfikowana. Lepiej zwrócić mniej wyników niż wymagane niż oddać kontakt niespełniający kryterium stanowiska.\n\nZwróć tyle potencjalnych klientów, o ile poprosi użytkownik, maksymalnie 20 na jedno zapytanie. Jeśli użytkownik nie podał liczby, zwróć do 10 najlepiej dopasowanych. Jeśli w ramach dostępnych narzędzi i limitu kroków nie udało się znaleźć żądanej liczby, zwróć tyle, ile realnie potwierdziłeś — nigdy nie zgaduj ani nie wymyślaj brakujących danych (nazwisk, firm, e-maili), żeby dobić do liczby.",
+          "maxIterations": 15
+        }
+      },
+      "id": "5304f98c-5f1d-4057-a93b-de8a512d3dab",
+      "name": "Silnik wyszukiwania leadów",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        0
+      ],
+      "notes": "AI Agent generujący listę potencjalnych klientów (leadów) na podstawie pola query przekazanego przez węzeł Uruchomiony przez inny workflow, korzystając z dwóch podłączonych narzędzi: Fire Crawl (przeszukiwanie/scrapowanie stron) i Hunter (wyszukiwanie firm, osób i adresów e-mail). Model OpenRouter Chat Model jest subnode'em, memory nie jest podłączone — workflow jest świadomie bezstanowy.\n\n- promptType: define — pobiera prompt użytkownika wprost z wyrażenia w polu text, zamiast domyślnego auto (które czytałoby chatInput z Chat Triggera); ta wartość jest wymagana, odkąd trigger tego workflow to Execute Workflow Trigger, a nie czat.\n- text: ={{ $json.query }} — wstawia jako prompt treść pola query otrzymanego od wywołującego workflow; stały tekst bez wyrażenia dałby agentowi zawsze ten sam, niezmienny prompt, niezależnie od danych wejściowych.\n- hasOutputParser: true — wymusza podłączenie subnode'a outputParser (tu: Structured Output Parser) i wymaga od modelu JSON-a zgodnego z jego schematem; ustawienie false zwróciłoby zwykły string w $json.output.\n- options.maxIterations: 15 — limit kroków agenta zmniejszony z pierwotnych 30 po tym, jak przy tej wartości agent raz przekroczył limit kontekstu modelu (131072 tokenów), zbierając za dużo danych z narzędzi w jednym uruchomieniu; wyższa wartość dałaby więcej prób przy trudnych zapytaniach kosztem większego ryzyka powtórki tego błędu.\n- options.systemMessage — instruuje agenta, żeby zwracał tyle leadów, o ile poprosi użytkownik (maks. 20, domyślnie do 10) i zakazuje wymyślania danych, gdy narzędzia nie znajdą wystarczającej liczby; sztywny prompt typu „zawsze zwróć dokładnie 5” byłby prostszy, ale nie dawałby wywołującemu kontroli nad wielkością wyniku."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "fe8facb1-35a0-4418-b668-b7595c1c4262",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik wyszukiwania leadów — generuje treść odpowiedzi, decyduje które z dwóch narzędzi (Fire Crawl czy Hunter) wywołać w danym kroku, i dopasowuje finalne wyjście do schematu prospects.\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy), z oknem kontekstu 131072 tokenów; płatny model (np. openai/gpt-5.2, sugerowany w materiale źródłowym) wymagałby płatnego konta OpenRouter i nie zadziała na tym koncie.\n- credentials.openRouterApi: podłączony credential \"OpenRouter account\" — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter; osobny credential miałby sens tylko, gdyby trzeba było rozdzielić limity/billing między różnymi kontami OpenRouter."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"prospects\": [ { \"firstName\": \"Jan\", \"lastName\": \"Kowalski\", \"company\": \"Nazwa firmy potencjalnego klienta\", \"role\": \"Stanowisko/rola tej osoby w firmie\", \"email\": \"Przewidywany adres e-mail\", \"reasoning\": \"Uzasadnienie, czemu ta osoba kwalifikuje się jako potencjalny klient\" } ] }"
+      },
+      "id": "fe1ca88f-047c-475d-9b93-c29d759493fd",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        240
+      ],
+      "notes": "Subnode outputParser wymuszający na agencie Silnik wyszukiwania leadów zwrócenie JSON-a zgodnego z zadanym schematem (tablica prospects) zamiast dowolnego tekstu.\n\n- jsonSchemaExample: przykładowy JSON z tablicą prospects, gdzie każdy element ma pola firstName, lastName, company, role, email, reasoning — na jego podstawie n8n generuje wymuszany schemat wyjścia; dodanie do przykładu pola np. phone natychmiast rozszerzyłoby wymagany schemat, bez dotykania promptu agenta."
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp.firecrawl.dev/v2/mcp",
+        "authentication": "bearerAuth",
+        "options": {}
+      },
+      "id": "d38a444f-f0af-44b4-8929-2eb05ec8c8c9",
+      "name": "Fire Crawl (MCP Client Tool)",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        368,
+        240
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "yZiIvyWHV8pYy561",
+          "name": "Firecrawl MCP (Bearer)"
+        }
+      },
+      "notes": "Jedno z dwóch narzędzi (subnode ai_tool) podłączonych do agenta Silnik wyszukiwania leadów — klient MCP łączący się ze zdalnym serwerem Fire Crawl, dający agentowi możliwość przeszukiwania i scrapowania stron internetowych.\n\n- endpointUrl: https://mcp.firecrawl.dev/v2/mcp — zdalny, hostowany endpoint MCP Fire Crawl (transport streamable HTTP, domyślny dla tego węzła); klucz API nie jest tu osadzony w URL, jak sugerował materiał źródłowy, bo aktualna dokumentacja Fire Crawl to odradza.\n- authentication: bearerAuth — klucz API Fire Crawl przekazywany w nagłówku Authorization: Bearer przez credential \"Firecrawl MCP (Bearer)\"; opcja headerAuth pasowałaby do serwera wymagającego customowego nagłówka (jak Hunter niżej), ale Fire Crawl wspiera Bearer, więc to najprostsza poprawna opcja."
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp.hunter.io/mcp",
+        "authentication": "headerAuth",
+        "include": "selected",
+        "includeTools": [
+          "Find-Companies",
+          "Find-People",
+          "Email-Finder",
+          "Email-Verifier",
+          "Domain-Search"
+        ],
+        "options": {}
+      },
+      "id": "f48b34b2-eb83-43db-abdd-24e7c25ca55c",
+      "name": "Hunter (MCP Client Tool)",
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        496,
+        240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "pHOcZdX3aCFbyFjS",
+          "name": "Hunter API (X-API-Key)"
+        }
+      },
+      "notes": "Drugie z dwóch narzędzi (subnode ai_tool) podłączonych do agenta Silnik wyszukiwania leadów — klient MCP łączący się ze zdalnym serwerem Huntera, dający dostęp do wyszukiwania firm, osób w firmach, adresów e-mail i weryfikacji ich deliverability.\n\n- endpointUrl: https://mcp.hunter.io/mcp — oficjalny, zdalny endpoint MCP Huntera, niezależny od metody autoryzacji poniżej.\n- authentication: headerAuth — klucz API Huntera przekazywany w customowym nagłówku X-API-Key przez credential \"Hunter API (X-API-Key)\"; Bearer (sugerowany w materiale źródłowym) by tu nie zadziałał, bo aktualna dokumentacja Huntera wymaga właśnie tego customowego nagłówka.\n- include: selected — ogranicza widoczny dla agenta zestaw narzędzi do wybranych w includeTools, zamiast wystawiać wszystkie ~100 narzędzi Huntera; wartość all wystawiłaby cały ten zestaw naraz, co empirycznie doprowadziło do przekroczenia limitu kontekstu modelu.\n- includeTools: Find-Companies, Find-People, Email-Finder, Email-Verifier, Domain-Search — pięć narzędzi wykorzystywanych w prospectingu; Email-Verifier pozwala agentowi sprawdzić deliverability znalezionego lub przewidzianego adresu e-mail, zamiast polegać wyłącznie na samym wzorcu z Email-Finder/Domain-Search."
+    }
+  ],
+  "connections": {
+    "Uruchomiony przez inny workflow": {
+      "main": [
+        [
+          {
+            "node": "Silnik wyszukiwania leadów",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik wyszukiwania leadów",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Silnik wyszukiwania leadów",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fire Crawl (MCP Client Tool)": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik wyszukiwania leadów",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter (MCP Client Tool)": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik wyszukiwania leadów",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "82414489-08f2-433d-9d6c-af01da93b62a",
+  "activeVersionId": "82414489-08f2-433d-9d6c-af01da93b62a",
+  "versionCounter": 25,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-05T13:03:29.086Z",
+      "createdAt": "2026-09-05T13:03:29.086Z",
+      "role": "workflow:owner",
+      "workflowId": "NfHGoXDEvE1F0KrF",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Zakaz podstawiania niższego stanowiska jako proxy",
+    "description": "Agent potrafił zwrócić np. \"Ecommerce Specialist\" jako wynik dla zapytania o \"dyrektora e-commerce\", uzasadniając to w polu reasoning jako \"silny proxy\". System prompt teraz tego wprost zabrania."
+  }
+}

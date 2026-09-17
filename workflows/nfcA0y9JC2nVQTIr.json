@@ -1,0 +1,241 @@
+{
+  "updatedAt": "2026-09-01T16:26:00.246Z",
+  "createdAt": "2026-09-01T12:26:51.699Z",
+  "id": "nfcA0y9JC2nVQTIr",
+  "name": "013 — Asystent Slack po wzmiance bota (Date & Time, OpenRouter)",
+  "description": "Slack Trigger nasłuchujący na app_mention na wybranym kanale. Odtworzone z kursu (integracja Slack, część 1 — trigger; część z AI Agent i odpowiedzią jeszcze nie pokazana w kursie).",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Konfiguracja aplikacji Slack (poza n8n)\n\n1. Na stronie Twojej przestrzeni roboczej: **Apps & workflows → App page** (albo wprost `api.slack.com/apps`) → **Create New App → From scratch**. Nadaj nazwę, wybierz workspace, **Create App**.\n2. **OAuth & Permissions → Scopes → Bot Token Scopes** — dodaj 6 zakresów: `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `im:history`, `users:read`.\n3. **Install to Workspace** → zatwierdź uprawnienia → skopiuj **Bot User OAuth Token** (zaczyna się `xoxb-`).\n4. W n8n: utwórz credential typu **Slack API**, wklej Bot Token.\n5. W node **Slack Trigger**: pole kanału → tryb **By ID** → wklej Channel ID (z ustawień kanału w Slacku: … → Edit settings → na dole). Ten sam Channel ID wchodzi też do node'a **Wyślij odpowiedź na Slacku**.\n6. W Slacku: utwórz kanał, wpisz `/invite @TwojaAppSlack`, żeby dodać bota do kanału.\n7. **Event Subscriptions → włącz → Request URL.** Slack Trigger w n8n ma DWA webhooki: **Test URL** (działa tylko, gdy w n8n masz ręcznie odpalone „Execute workflow” i aktywnie czekasz) i **Production URL** (działa w tle, ale wymaga, żeby workflow był opublikowany/aktywny w n8n). Wklej ten, którego aktualnie używasz, poczekaj na weryfikację (Slack wysyła challenge), **Save Changes**.\n8. **Subscribe to bot events →** dodaj `app_mention`, zapisz jeszcze raz (Slack to osobny krok od włączenia Request URL).\n\n(Opcjonalnie) **Basic Information → Signing Secret** — dodatkowe zabezpieczenie w credentialu n8n, można pominąć.",
+        "height": 560,
+        "width": 640
+      },
+      "id": "aabd7877-ca37-4dba-9769-ff85d7e0cd1a",
+      "name": "Jak skonfigurować aplikację Slack",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## To ten sam bloker co przy Telegramie\n\n**Ten workflow również nie zadziała na tej instancji** (ani Test URL, ani Production URL). Slack Event Subscriptions wymaga publicznego adresu Request URL (HTTPS) i weryfikuje go przez handshake, zanim w ogóle pozwoli włączyć subskrypcję zdarzeń — dokładnie ta sama przyczyna, co przy Telegram Trigger w workflow 012.\n\nn8n działa lokalnie na `localhost:5678` bez HTTPS, więc pole Request URL w Slacku nie zweryfikuje się bez tunelu (np. ngrok) i zmiennej `WEBHOOK_URL`. Świadomie nieaktywne na razie.\n\nStruktura workflow jest kompletna: Slack Trigger (app_mention) → AI Agent (OpenRouter gpt-oss-120b + narzędzie Date & Time, bez pamięci) → odpowiedź z powrotem na ten sam kanał Slacka.",
+        "height": 460,
+        "width": 460,
+        "color": 4
+      },
+      "id": "07e10028-49c5-4961-914a-dad4fbcc1216",
+      "name": "Status: to również wymaga HTTPS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        528,
+        368
+      ]
+    },
+    {
+      "id": "85b9d73c-3551-41cd-ab5b-0ab77ee8fb05",
+      "name": "Slack Trigger (wzmianka bota)",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<__PLACEHOLDER_VALUE__Wklej Channel ID kanału Slack, na którym bot ma nasłuchiwać__>"
+        },
+        "options": {}
+      },
+      "notes": "Punkt wejścia całego workflow — nasłuchuje na zdarzenie app_mention na jednym, konkretnym kanale Slacka wskazanym w polu Channel ID (wartość to placeholder, trzeba podmienić na realne ID kanału). Uruchamia się za każdym razem, gdy ktoś w tym kanale wspomni bota (@nazwa_bota) w wiadomości. Surowy event Slacka (treść, nadawca, kanał, wątek) trafia bez modyfikacji do node'a AI Agent jako $json. Wymaga aplikacji Slack skonfigurowanej z odpowiednimi zakresami (opisane w sticky note obok) oraz publicznego HTTPS URL do weryfikacji subskrypcji zdarzeń — na tej lokalnej instancji (localhost:5678) webhook nie da się aktywować bez tunelu.",
+      "webhookId": "e6f65252-097a-4a06-af96-649f512465ae"
+    },
+    {
+      "id": "a3239c03-f6ba-49c0-a378-00042643f8ce",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Proszę odpowiedz na tę wiadomość ze slacka.\n\n{{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "notes": "Mózg workflow — dostaje cały surowy JSON zdarzenia Slack (JSON.stringify($json)) jako input i sam wyciąga z niego treść wiadomości, bo Slack Trigger nie ma dedykowanego pola chatInput jak wbudowany Chat Trigger. Korzysta z modelu OpenRouter (node „OpenRouter Chat Model”) jako language model oraz z narzędzia „Pobierz aktualną datę” do odpowiedzi na pytania o bieżącą datę/czas. Nie ma podpiętej pamięci (Simple Memory) — każda wzmianka bota jest traktowana jako oddzielna, niezależna rozmowa bez kontekstu poprzednich wiadomości. Wygenerowaną odpowiedź ($json.output) przekazuje dalej do node'a „Wyślij odpowiedź na Slacku”."
+    },
+    {
+      "id": "cb6f11ff-5b7a-4fda-90a5-dddad3df568d",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        224
+      ],
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla AI Agenta, podłączony jako ai_languageModel. Używa darmowego modelu openai/gpt-oss-120b przez OpenRouter — tego samego, który jest domyślnie ustawiany w innych workflow tej instancji (np. 009), gdy node zostaje bez wybranego modelu. Credential „OpenRouter account” musi być poprawnie skonfigurowany, inaczej agent nie wygeneruje odpowiedzi. Nie ma tu żadnej dodatkowej logiki — to czysty most między AI Agentem a API OpenRouter."
+    },
+    {
+      "id": "4e7abc83-adfd-4636-abff-3ca7be08e547",
+      "name": "Pobierz aktualną datę",
+      "type": "n8n-nodes-base.dateTimeTool",
+      "typeVersion": 2,
+      "position": [
+        368,
+        224
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "notes": "Narzędzie AI (ai_tool) podpięte do AI Agenta, oparte na node'ie Date & Time. Pozwala agentowi sprawdzić aktualną datę i godzinę w trakcie generowania odpowiedzi, np. gdy użytkownik na Slacku zapyta o dzisiejszą datę albo poprosi o coś zależnego od bieżącego czasu. Agent decyduje samodzielnie, kiedy go wywołać — to nie jest stały krok w przepływie danych, tylko opcjonalna akcja dostępna na żądanie modelu. Domyślne opcje node'a nie są zmienione."
+    },
+    {
+      "id": "6a43322e-b4ae-4312-9962-894d120889f1",
+      "name": "Wyślij odpowiedź na Slacku",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        576,
+        0
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "<__PLACEHOLDER_VALUE__Ten sam Channel ID co w Slack Trigger__>"
+        },
+        "text": "={{ $json.output }}",
+        "otherOptions": {}
+      },
+      "notes": "Ostatni krok workflow — wysyła wygenerowaną przez AI Agenta odpowiedź ({{ $json.output }}) z powrotem na Slacka, na kanał wskazany w polu Channel ID (placeholder do podmiany na to samo ID co w Slack Trigger). Tryb select: channel oznacza wysyłkę zwykłej wiadomości na kanał, nie odpowiedzi w wątku oryginalnej wzmianki. Wymaga tego samego credentiala Slack API co Slack Trigger. Efekt końcowy: bot odpowiada publicznie na kanale, w którym został wspomniany.",
+      "webhookId": "7fb21228-28d2-424e-92db-543fdd8fdc7a"
+    },
+    {
+      "id": "6263c835-8e88-42d5-a1f7-c6dbfa906a6c",
+      "name": "Podsumowanie workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        960
+      ],
+      "parameters": {
+        "content": "## 013 — Asystent Slack po wzmiance bota\n\nBot słucha wzmianek (`app_mention`) na jednym kanale Slacka, odpowiada przez AI Agenta (OpenRouter `gpt-oss-120b`) wspieranego narzędziem sprawdzającym aktualną datę, i wysyła odpowiedź z powrotem na ten sam kanał. Bez pamięci konwersacji — każda wzmianka to nowa, niezależna rozmowa.\n\n**Uwaga:** ta lokalna instancja (`localhost:5678`, bez HTTPS) nie spełnia wymogu Slack Event Subscriptions na publiczny Request URL — workflow nie da się aktywować bez tunelu (np. ngrok) i zmiennej `WEBHOOK_URL`. Struktura jest kompletna i gotowa po dodaniu tunelu.\n\nPrzed aktywacją: podmień placeholdery Channel ID w node'ach „Slack Trigger (wzmianka bota)” i „Wyślij odpowiedź na Slacku” na realne ID kanału.",
+        "height": 420,
+        "width": 600
+      }
+    }
+  ],
+  "connections": {
+    "Slack Trigger (wzmianka bota)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Wyślij odpowiedź na Slacku",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz aktualną datę": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "cdb1036e-8b27-4b6e-b90c-93ca1dfc371e",
+  "activeVersionId": null,
+  "versionCounter": 8,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-01T12:26:51.701Z",
+      "createdAt": "2026-09-01T12:26:51.701Z",
+      "role": "workflow:owner",
+      "workflowId": "nfcA0y9JC2nVQTIr",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Dokumentacja: Notes per node + sticky note podsumowujący",
+    "description": "Dodano 4-5 zdaniowe wyjaśnienia w polu Notes każdego realnego node'a oraz jeden sticky note z podsumowaniem workflow. OpenRouter Chat Model już miał ustawiony model openai/gpt-oss-120b — bez zmian."
+  }
+}

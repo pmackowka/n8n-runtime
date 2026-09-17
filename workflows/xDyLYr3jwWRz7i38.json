@@ -1,0 +1,4489 @@
+{
+  "updatedAt": "2026-09-01T13:23:04.135Z",
+  "createdAt": "2026-07-06T15:59:55.428Z",
+  "id": "xDyLYr3jwWRz7i38",
+  "name": "005 — Publikacja treści na 25 kanałach social (Airtable + Postiz)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"devto_id\": \"<ID kanału Dev.to tutaj>\",\n  \"wordpress_id\": \"<ID kanału WordPress tutaj>\",\n  \"dribble_id\": \"<ID kanału Dribbble tutaj>\",\n  \"hashnode_id\": \"<ID kanału Hashnode tutaj>\",\n  \"final_text_long\": {{ $('Airtable').item.json.Script.toJsonString() }},\n  \"final_text_short\": {{ $('Airtable').item.json['Text for X'].toJsonString() }}\n}",
+        "options": {}
+      },
+      "id": "a15a1bfd-6a2b-45a7-9f22-0be4cc41dec1",
+      "name": "Prepare for Publish",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -928,
+        656
+      ],
+      "typeVersion": 3.4,
+      "notesInFlow": false,
+      "notes": "ROLA: Węzeł Set budujący jeden obiekt JSON z kompletną konfiguracją publikacji — łączy ID kanałów Postiz z finalnymi tekstami posta. Centralny punkt konfiguracji: wszystkie węzły publikujące sięgają tu po dane.\n\nMECHANIZM (tryb Raw JSON): tworzy obiekt z polami:\n- devto_id, wordpress_id, dribble_id, hashnode_id — identyfikatory kanałów w Postiz, po jednym na platformę. To PLACEHOLDERY (<ID kanału ... tutaj>) do podmiany na własne wartości z panelu Postiz.\n- final_text_long — treść długa, z kolumny Script rekordu Airtable.\n- final_text_short — treść krótka (np. pod X/Twitter), z kolumny Text for X.\n\nSKĄD ID KANAŁÓW: w Postiz → Calendar → trzy kropki przy kanale → kopiuj channel ID, albo przez API GET https://api.postiz.com/public/v1/integrations z nagłówkiem Authorization.\n\nWEJŚCIE: rekord z węzła Airtable (czyta Script i Text for X).\nWYJŚCIE: obiekt konfiguracyjny → do Grab Image from Airtable (start obsługi mediów). Dalsze węzły POST czytają stąd integration.id przez wyrażenia typu {{ $('Prepare for Publish').item.json.devto_id }}.\n\nDLACZEGO TU: zamiast wpisywać ID kanału w każdym z 4 węzłów publikujących osobno, trzymasz je w jednym miejscu. Klucze pól są po angielsku, bo odwołują się do nich wyrażenia w węzłach POST — zmiana nazwy = konieczność poprawki wszędzie."
+    },
+    {
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "id": "={{ $json.airtableID }}",
+        "options": {}
+      },
+      "id": "3c27e2fc-c05e-4e87-8fc6-8a934c3d8397",
+      "name": "Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        -1152,
+        656
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Pobiera z bazy Airtable pełny rekord treści, którego ID przyszło z webhooka. To źródło wszystkich danych publikowanych w tym przebiegu — reszta workflow czyta z niego przez wyrażenia $('Airtable').item.json[...].\n\nMECHANIZM: operacja pobrania rekordu po identyfikatorze — pole id ustawione na {{ $json.airtableID }} (wartość z węzła Airtable Record ID). Baza i tabela wskazane na stałe (base appG0wM9Oe2bp1qhh, table tblM3kDu1qB2FdTOF) — to baza autora szablonu; podmień na własną kopię bazy „Social Media System\".\n\nKOLUMNY, KTÓRE CZYTAJĄ DALSZE WĘZŁY: Script (długi tekst posta), Text for X (krótsza wersja), Media Title (tytuł/temat posta), Image URL i Video URL (linki do mediów w Airtable), Telegram Chat ID (adresat powiadomienia), Publishing Log (log statusów publikacji, dopisywany po każdej platformie), id (identyfikator rekordu, potrzebny do zapisu statusu). Nazwy kolumn są po angielsku, bo muszą 1:1 odpowiadać schematowi bazy — tłumaczenie zepsułoby odczyt.\n\nWEJŚCIE: airtableID (z poprzedniego węzła).\nWYJŚCIE: cały rekord → do Prepare for Publish.\n\nKONFIGURACJA: wymaga credentiala Airtable Personal Access Token ze scope'ami data.records:read, data.records:write, schema.bases:read."
+    },
+    {
+      "parameters": {
+        "content": "## **Szybki przewodnik konfiguracji — automatyzacja n8n + Postiz**\n\n### **Krok 1: Załóż konto Postiz**\nZarejestruj się na https://postiz.com/?ref=max (lub użyj istniejącego konta)\n\n### **Krok 2: Podłącz swoje konta social media**\n1. Wejdź w **Channels** w panelu Postiz\n2. Kliknij **Add Channel**\n3. Podłącz wszystkie platformy, których chcesz używać (Dev.to, Hashnode, WordPress, Dribbble itd.)\n4. Autoryzuj każdą platformę, gdy pojawi się monit\n\n### **Krok 3: Pobierz ID swoich kanałów**\nW kalendarzu kliknij trzy kropki i skopiuj channel ID\n\nLUB\n\nUruchom to polecenie (albo użyj Postmana):\n```bash\ncurl -H \"Authorization: YOUR_API_KEY\" \"https://api.postiz.com/public/v1/integrations\"\n```\nZapisz `id` każdej podłączonej platformy i wstaw je do węzła \"Prepare for Publish\"\n\n### **Krok 4: Pobierz swój klucz API**\n1. W panelu Postiz wejdź w **Settings** → **API Keys**\n2. Skopiuj swój klucz API\n3. **WAŻNE:** trzymaj go bezpiecznie, nie udostępniaj\n\n### **Krok 5: Skonfiguruj workflow n8n**\n1. Otwórz węzeł **\"Prepare for Publish\"**\n2. Podmień ID platform na swoje:\n   - `devto_id`: Twój channel ID Dev.to\n   - `hashnode_id`: Twój channel ID Hashnode\n   - `wordpress_id`: Twój channel ID WordPress\n   - `dribbble_id`: Twój channel ID Dribbble\n\n### **Krok 6: Dodaj swój klucz API**\nW każdym węźle HTTP Request typu **Upload** oraz **\"Post to [Platforma]\"**:\n1. Znajdź \"Authentication\" i wybierz \"Generic Credential Type\"\n2. Znajdź \"Generic Auth Type\" i wybierz \"Header Auth\"\n3. Znajdź \"Header Auth\" i wybierz \"Create New Credential\"\n4. W lewym górnym rogu nazwij ją sensownie, np. \"Postiz Header Auth\"\n5. Dla name: Authorization\n6. Dla Value: wklej swój klucz API\n\n### **Krok 7: Dostosuj harmonogram**\n- **Publikuj natychmiast:** użyj `\"type\": \"now\"`\n- **Zaplanuj posty:** użyj `\"type\": \"schedule\"` i ustaw preferowany czas:\n  - `\"{{ $now.plus({hours: 2}).toISO() }}\"` - za 2 godziny\n  - `\"{{ $now.plus({days: 1}).toISO() }}\"` - jutro o tej samej porze\n  - W razie potrzeby ustaw różny czas dla każdej platformy\n\n### **Krok 8: Dodaj więcej platform**\n1. Zduplikuj dowolny istniejący węzeł \"Post to [Platforma]\"\n2. Dodaj ID konta wg powyższego do \"Prepare for Publish\"\n3. Zaktualizuj `integration.id` na ID nowej platformy\n3. W razie potrzeby dostosuj `settings` do wymagań platformy:\n   - **Większość platform:** wystarczy `title`\n   - **Hashnode:** wymaga `publication` i `tags` jako obiektów\n   - **WordPress:** wymaga `type`: \"post\" lub \"page\"\n   - itd.\n\n### **Krok 9: Ustawienia specyficzne dla platformy**\n- **Hashnode:** zaktualizuj `\"publication\": \"nazwa-twojej-publikacji\"`\n- **WordPress:** wybierz `\"type\": \"post\"` lub `\"page\"`\n- **Tagi:** dostosuj per platforma wg potrzeb\n\n### **Krok 10: Test i uruchomienie**\n1. Przetestuj najpierw na jednym elemencie i użyj pinów\n2. Sprawdź panel Postiz → **Calendar**, żeby zobaczyć zaplanowane posty\n3. Monitoruj błędy w logu wykonania n8n\n4. Skopiuj błędy do ulubionego LLM po łatwe odpowiedzi :)\n\n### **Uwagi:**\n- Limit API: 30 żądań na godzinę\n- Media: większość platform obsługuje obrazy, mniej wideo\n- Wszystkie czasy są w UTC\n- Posty pojawiają się w panelu Postiz od razu po wywołaniu API\n\n**Potrzebujesz pomocy?** Sprawdź posty w widoku Calendar w Postiz, żeby zdebugować problemy!",
+        "height": 2376,
+        "width": 832,
+        "color": 3
+      },
+      "id": "91f78e9b-32c4-4ffd-ba5e-ec5728861042",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2496,
+        160
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ca998655-fcdd-4169-b470-492cf5113b6a",
+              "name": "=airtableID",
+              "type": "string",
+              "value": "={{ $json.body.airtableID }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03ce4f4c-d7de-4480-86fd-b728e8e2441c",
+      "name": "Airtable Record ID",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -1376,
+        656
+      ],
+      "typeVersion": 3.4,
+      "notesInFlow": false,
+      "notes": "ROLA: Węzeł Set (Edit Fields) wyciągający identyfikator rekordu z ciała webhooka do jednej czystej zmiennej. Krok pośredni między odbiorem żądania a zapytaniem do bazy.\n\nMECHANIZM: tworzy pole airtableID o wartości wyrażenia {{ $json.body.airtableID }} — czyli sięga do body odebranego POST-a i wyjmuje z niego pole airtableID. Dzięki temu kolejny węzeł nie musi grzebać w strukturze surowego żądania, tylko dostaje gotowe airtableID.\n\nWEJŚCIE: surowe ciało żądania z węzła Webhook (obiekt body z polem airtableID).\nWYJŚCIE: pojedyncze pole airtableID → do węzła Airtable, który po nim pobiera rekord.\n\nPO CO OSOBNY WĘZEŁ: rozdziela parsowanie wejścia od zapytania do bazy — gdyby format webhooka się zmienił, poprawiasz tylko tu. Bez logiki biznesowej.\n\nTEST BEZ WEBHOOKA: to jest miejsce, w którym do ręcznego testu możesz wpisać Record ID na sztywno. Zamiast wyrażenia z body wstaw literalny \"recXXXX\" i uruchom workflow od tego węzła — pominiesz potrzebę zewnętrznego systemu wołającego webhook (o tym mówi sticky note „UZUPEŁNIJ MNIE\" na canvie)."
+    },
+    {
+      "parameters": {
+        "content": "# Jak dodać przykładową tabelę i połączyć n8n z Airtable\n\n---\n\n## Część 1: Dodaj przykładową tabelę do Airtable\n\n1. **Załóż konto i zaloguj się do Airtable**\n   - Jeśli nie masz konta Airtable: [Zarejestruj się tutaj (link afiliacyjny)](https://airtable.com/invite/r/6UyZyAAd)\n\n2. **Otwórz przykładową bazę**\n   - Link: [Social Media System Base](https://airtable.com/appbOSIspSmMfeJeg/shr7htmWB9GNRrpw3)\n\n3. **Skopiuj bazę**\n   - Po prawej od tytułu *\"Social Media System\"* kliknij **\"Copy base\"**.\n\n4. **Wybierz workspace**\n   - Wskaż workspace, do którego skopiować bazę, i kliknij **\"Add base\"**.\n\n**✅ Gotowe! Masz teraz dodaną przykładową bazę.**\n\n---\n\n## Część 2: Połącz n8n z Airtable\n\n### Krok A: Utwórz Personal Access Token w Airtable\n\n1. **Załóż konto i zaloguj się do Airtable**\n   - [Zarejestruj się tutaj (link afiliacyjny)](https://airtable.com/invite/r/6UyZyAAd)\n\n2. **Wejdź w Personal Tokens**\n   - Prawy górny róg: kliknij **ikonę konta** → wybierz **\"Builder hub\"**.\n   - Lewa nawigacja: przejdź do **\"Developers\"** → kliknij **\"Personal access tokens\"**.\n\n3. **Utwórz nowy token**\n   - Kliknij **\"Create token\"**.\n   - Nazwij token (przykład: *\"Airtable personal access token for n8n\"*).\n     **(Jeszcze nie twórz!)**\n\n4. **Ustaw scope'y**\n   - Kliknij **\"+ Add a scope\"** i włącz te scope'y:\n     - `data.records:read`\n     - `data.records:write`\n     - `schema.bases:read`\n\n5. **Opcjonalnie: ogranicz dostęp**\n   - Jeśli chcesz ograniczyć credential do wybranych baz:\n     - Pod **Access** kliknij **\"+ Add a base\"** i wybierz bazę(y).\n\n6. **Sfinalizuj i zapisz token**\n   - Po utworzeniu wyskakujące okno pokaże token **tylko raz**.\n   - **Skopiuj i schowaj bezpiecznie!**\n\n---\n\n### Krok B: Dodaj credential Airtable w n8n\n\n1. **Załóż konto i zaloguj się do n8n**\n   - [Zarejestruj się tutaj (link afiliacyjny)](https://n8n.partnerlinks.io/aiwithapex)\n\n2. **Utwórz nowy credential**\n   - Prawy górny róg: obok czerwono-pomarańczowego przycisku **\"Create Workflow\"** rozwiń listę → wybierz **\"Create Credential\"**.\n   - (Alternatywnie utworzysz go z wnętrza dowolnego węzła Airtable.)\n\n3. **Wpisz dane tokenu**\n   - W oknie wpisz **\"Airtable personal access token api\"**, kliknij **\"Continue\"**.\n   - Wklej swój **zapisany token Airtable**.\n\n4. **Nazwij credential porządnie**\n   - Lewy górny róg okna: zmień nazwę tokenu na łatwo rozpoznawalną.\n\n5. **Zapisz i przetestuj połączenie**\n   - Kliknij **\"Save\"** w prawym górnym rogu.\n   - Powinieneś zobaczyć **\"Connection tested successfully\"**.\n   - Możesz teraz **zamknąć** okno.\n\n**✅ Gotowe! n8n jest połączone z Twoją bazą Airtable.**",
+        "height": 1880,
+        "width": 580
+      },
+      "id": "7ae478a1-7fbe-4fcc-afe6-995b3a310309",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -688,
+        832
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "# Link afiliacyjny Postiz Cloud, wesprzyj moją pracę:  https://postiz.com/?ref=max\n## Postiz obsługuje 25 DWADZIEŚCIA PIĘĆ platform!!!   Uwaga - do autoryzacji będzie potrzebny klucz API, szczegóły poniżej",
+        "height": 132,
+        "width": 1508
+      },
+      "id": "ec7f3fea-6f91-43af-a794-064331f281da",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1632,
+        160
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## UZUPEŁNIJ MNIE!\n\n### Użyj linku powyżej, żeby zalogować się do Postiz Cloud\n\n- Wejdź w Calendar\n- Kliknij trzy kropki przy każdym podłączonym kanale, żeby skopiować channel ID\n- Alternatywnie możesz pobrać channel ID przez API:\n\ncurl -H \"Authorization: <twój klucz api z panelu>\" \\\n  \"https://api.postiz.com/public/v1/integrations\\\"",
+        "height": 540,
+        "width": 244,
+        "color": 5
+      },
+      "id": "758bc6e8-1c45-4ef6-9ca1-f636b3f34a27",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1008,
+        288
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "6a7f105d-7043-48b4-9a53-284ca2b55dc8",
+        "options": {}
+      },
+      "id": "ec02c54a-6a96-4b49-a84f-38daecf24ec4",
+      "name": "Webhook from Content Creation",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -1600,
+        656
+      ],
+      "webhookId": "6a7f105d-7043-48b4-9a53-284ca2b55dc8",
+      "typeVersion": 2,
+      "notesInFlow": false,
+      "notes": "ROLA: Punkt wejścia całego workflow. To webhook produkcyjny nasłuchujący na żądania HTTP POST — dopóki nie przyjdzie żądanie, workflow śpi. Odebranie POST natychmiast uruchamia publikację.\n\nCO GO WYWOŁUJE: nadrzędny „system tworzenia treści\" (content creation system) powiązany z Airtable. W zamyśle autora szablonu to osobny, wcześniejszy proces (inny workflow n8n, agent AI albo dowolny skrypt), który: (1) tworzy treść posta i media, (2) zapisuje je jako rekord w Airtable, (3) po zapisie woła TEN webhook, przekazując identyfikator utworzonego rekordu. Ten workflow jest więc drugim etapem łańcucha — nie tworzy treści, tylko publikuje już przygotowaną.\n\nFORMAT WEJŚCIA: żądanie POST z ciałem JSON zawierającym jedno pole — airtableID (identyfikator rekordu Airtable, np. \"recXXXXXXXXXXXXXX\"). Przykład wywołania:\ncurl -X POST \"https://TWOJA-INSTANCJA/webhook/6a7f105d-7043-48b4-9a53-284ca2b55dc8\" -H \"Content-Type: application/json\" -d '{\"airtableID\":\"recAbc123\"}'\n\nKONFIGURACJA: metoda POST, ścieżka to stały UUID 6a7f105d-7043-48b4-9a53-284ca2b55dc8. n8n udostępnia dwa adresy: Test URL (działa tylko przy otwartym edytorze i kliętym „Listen for test event\") oraz Production URL (działa po aktywacji workflow). Do integracji z realnym systemem użyj Production URL.\n\nJAK WYWOŁAĆ Z INNEGO WORKFLOW n8n: w tamtym workflow dodaj węzeł HTTP Request → metoda POST → Production URL tego webhooka → w body JSON wstaw {\"airtableID\": \"{{ $json.id }}\"} z ID rekordu utworzonego w Airtable.\n\nPUŁAPKA: endpoint nie ma żadnego uwierzytelnienia — każdy, kto zna URL, może wyzwolić publikację. W produkcji dołóż Header Auth na webhooku albo warstwę autoryzacji przed n8n. Do testów bez zewnętrznego systemu możesz pominąć webhook i wpisać Record ID wprost w kolejnym węźle (patrz jego notes).\n\nWYJŚCIE: przekazuje surowe ciało żądania do węzła Airtable Record ID, który wyłuska z niego airtableID."
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Airtable: Retrieve Content Entry').item.json['Telegram Chat ID'][0] }}",
+        "text": "=Media gotowe! 💭 Planuję lub publikuję teraz!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "0bcf6aba-1074-4050-86cb-b7ef9efb21a2",
+      "name": "Telegram: User Update",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        192,
+        1232
+      ],
+      "webhookId": "4b48d2d8-01c9-4e48-94ef-0356df821007",
+      "typeVersion": 1.2,
+      "notesInFlow": false,
+      "disabled": true,
+      "notes": "ROLA: Wysyła użytkownikowi powiadomienie na Telegramie, że media są gotowe i trwa planowanie/publikacja. Gałąź informacyjna, równoległa do publikacji — nie wpływa na to, czy posty pójdą.\n\nMECHANIZM: węzeł Telegram (sendMessage). Treść wiadomości (po polsku): „Media gotowe! Planuję lub publikuję teraz!\". Adresata bierze dynamicznie z rekordu — chatId = {{ $('Airtable: Retrieve Content Entry').item.json['Telegram Chat ID'][0] }}, czyli numer czatu zapisany w kolumnie Telegram Chat ID.\n\nWEJŚCIE: jedno z pięciu wyjść węzła Upload Video to Postiz.\nWYJŚCIE: → Update Managing Agent.\n\nKONFIGURACJA: wymaga credentiala bota Telegram (token z BotFather). Odbiorca musi mieć aktywny czat z botem, a jego Telegram Chat ID musi być w rekordzie Airtable.\n\nUWAGA: to komunikat dla człowieka „w pętli\" — sygnał, że proces ruszył. Nie potwierdza sukcesu publikacji (ten status ląduje w Airtable Publishing Log)."
+    },
+    {
+      "parameters": {
+        "content": "## Raportowanie",
+        "height": 200,
+        "width": 700,
+        "color": 4
+      },
+      "id": "b5cdcd2d-e789-422a-bdf4-308fa1d740cb",
+      "name": "Sticky Note9",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        128,
+        1200
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.yoursite.ai/webhook/<value here>",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messageToManagingAgent\": \"Social media opublikowane! Zadanie agenta social media ZAKOŃCZONE [[SOCIAL_MEDIA_AGENT]]  \"\n}",
+        "options": {}
+      },
+      "id": "854cbefd-855b-4c0f-bb84-c9c76f8d959e",
+      "name": "Update Managing Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        416,
+        1232
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "disabled": true,
+      "onError": "continueRegularOutput",
+      "notes": "ROLA: Wysyła sygnał zakończenia do nadrzędnego agenta zarządzającego (orkiestratora) w architekturze multi-agent. Domyka pętlę: informuje system nadrzędny, że zadanie „opublikuj w social media\" zostało wykonane.\n\nMECHANIZM: HTTP Request POST z ciałem JSON zawierającym messageToManagingAgent = „Social media opublikowane! Zadanie agenta social media ZAKOŃCZONE [[SOCIAL_MEDIA_AGENT]]\". Marker [[SOCIAL_MEDIA_AGENT]] to znacznik, po którym agent zarządzający rozpoznaje, od którego pod-agenta przyszła odpowiedź.\n\nWEJŚCIE: z Telegram: User Update.\nWYJŚCIE: → Finalize Transaction!.\n\nKONFIGURACJA: URL endpointu to PLACEHOLDER https://n8n.yoursite.ai/webhook/<value here> — podmień na webhook własnego orkiestratora. Jeśli NIE masz nadrzędnego agenta (używasz workflow samodzielnie), ten węzeł jest zbędny: usuń go i połącz Telegram → Finalize Transaction! bezpośrednio, albo zostaw — przy błędnym URL publikacja i tak się wykona, ale ten węzeł zgłosi błąd.\n\nKONTEKST: to element wzorca, w którym ten workflow jest pod-agentem większego systemu (ten sam system, który na starcie wołał webhook wejściowy)."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Production": "Published",
+            "n8n Publishing Date": "={{ $now }}",
+            "n8n Publishing Time": "={{ $now }}"
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                },
+                {
+                  "name": "Failed to Publish Instagram",
+                  "value": "Failed to Publish Instagram"
+                }
+              ],
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TTS Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "TTS Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Narration Link",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Narration Link",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Slide Image Prompt 1",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Slide Image Prompt 1",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Slide Image Prompt 2",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Slide Image Prompt 2",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Slide Image Prompt 3",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Slide Image Prompt 3",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Slide Image Prompt 4",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Slide Image Prompt 4",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Slide Image Prompt 5",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Slide Image Prompt 5",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "GDrive Folder Link",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "GDrive Folder Link",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL 2",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL 2",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL 3",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL 3",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL 4",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL 4",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL 5",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL 5",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Chat ID",
+              "type": "number",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Chat ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7ddc5301-1c53-42c2-a1f2-b61f6ab4d3fa",
+      "name": "Finalize Transaction!",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        640,
+        1232
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zamyka cały proces — oznacza rekord Airtable jako opublikowany i stempluje datą/godziną. Ostatni węzeł głównego toru; po nim workflow kończy pracę.\n\nMECHANIZM: operacja update rekordu. Ustawia: Production = \"Published\" (wartość single-select oznaczająca treść jako wypuszczoną), n8n Publishing Date = {{ $now }}, n8n Publishing Time = {{ $now }}. Rekord identyfikowany po id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: z Update Managing Agent.\nWYJŚCIE: brak — koniec przepływu.\n\nPO CO: dzięki ustawieniu Production = Published rekord nie zostanie ponownie przetworzony (nadrzędny system może filtrować po tym statusie), a stemple czasu dają ślad audytowy „kiedy opublikowano\".\n\nUWAGA: wartość „Published\" i nazwy kolumn zostają po angielsku, bo to opcje/pola w schemacie bazy Airtable — tłumaczenie zapisałoby wartość, której baza nie zna, i zepsuło automatyzację."
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.random() * 37 + 3 }}"
+      },
+      "id": "683ff242-ec09-49ec-9ba4-f952a1574ca3",
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        192,
+        368
+      ],
+      "webhookId": "04ed8248-6a56-4000-84c7-5e37e3533095",
+      "typeVersion": 1.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Losowa pauza przed publikacją na Hashnode. Rozkłada wywołania API Postiz w czasie, żeby fan-out na kilka platform nie uderzył w limit 30 żądań na godzinę naraz.\n\nMECHANIZM: czas oczekiwania to wyrażenie Math.random() * 37 + 3 — czyli LOSOWO od 3 do 40 sekund przy każdym uruchomieniu. Losowość (a nie stała wartość) dodatkowo rozprasza żądania, tak by równoległe gałęzie nie trafiały w API w tej samej sekundzie.\n\nWEJŚCIE: sygnał z Upload Video to Postiz.\nWYJŚCIE: po odczekaniu → Hashnode Postiz - POST NOW!1.\n\nTO NIE LOGIKA BIZNESOWA: czysty throttling. Jeśli publikujesz na mało platform albo masz wyższy limit API, można skrócić lub usunąć."
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.random() * 37 + 3 }}"
+      },
+      "id": "9518cca3-cd67-4413-b3bb-6e039c4aa3a8",
+      "name": "Wait1",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        192,
+        944
+      ],
+      "webhookId": "4c100f94-7927-427e-b9ce-43e77a22359b",
+      "typeVersion": 1.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Losowa pauza przed publikacją na Dribbble — bliźniacza do węzła Wait, ale na innej gałęzi fan-outu.\n\nMECHANIZM: czas oczekiwania Math.random() * 37 + 3 = losowo 3–40 sekund. Rozprasza żądania względem limitu 30/h Postiz.\n\nWEJŚCIE: sygnał z Upload Video to Postiz.\nWYJŚCIE: po odczekaniu → Dribble Postiz - POST NOW!1.\n\nDLACZEGO OSOBNY WĘZEŁ: każda opóźniana gałąź potrzebuje własnego węzła Wait — nie da się współdzielić jednego między dwie równoległe ścieżki."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/upload",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9449e6ba-552f-4cdb-8f38-5299e88cd5df",
+      "name": "Upload Image to Postiz",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -480,
+        656
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Wysyła pobrany obraz do magazynu mediów Postiz. W odpowiedzi Postiz zwraca id i path wgranego pliku — referencje, którymi później posty odwołują się do obrazu.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/upload, Content-Type multipart/form-data (przesyłka pliku binarnego z poprzedniego węzła). Uwierzytelnia się nagłówkiem Authorization = klucz API Postiz (Generic Credential Type → Header Auth).\n\nWEJŚCIE: binarny plik obrazu z Grab Image from Airtable.\nWYJŚCIE: JSON z polami id i path medium → czytane później przez węzły POST jako {{ $('Upload Image to Postiz').item.json.id }} / .path. Przepływ idzie dalej do pobrania wideo.\n\nKONFIGURACJA: wymaga credentiala Postiz Header Auth (name: Authorization, value: klucz API z Postiz → Settings → API Keys). Ten sam credential jest w węźle uploadu wideo i we wszystkich 4 węzłach publikujących.\n\nPUŁAPKA: bez wgrania medium najpierw, posty nie mają do czego się odwołać — kolejność (upload → publikacja) jest wymagana."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Airtable').item.json['Image URL'] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "affd6d1e-92db-4b59-a5e4-6f7576ec53fb",
+      "name": "Grab Image from Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -704,
+        656
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Pobiera plik obrazu z Airtable jako dane binarne — pierwszy z dwóch kroków przygotowania mediów. Postiz nie przyjmuje linku do obrazu, tylko wgrany plik, więc najpierw trzeba go ściągnąć.\n\nMECHANIZM: HTTP Request typu GET pod adres z kolumny Image URL rekordu ({{ $('Airtable').item.json['Image URL'] }}). Kluczowa opcja: Response Format = File — odpowiedź jest traktowana jako binarny plik (nie tekst/JSON), gotowy do przesłania dalej jako multipart.\n\nWEJŚCIE: URL obrazu z rekordu Airtable.\nWYJŚCIE: binarny plik obrazu → do Upload Image to Postiz.\n\nUWAGA: adres to publiczny URL załącznika Airtable, więc ten węzeł nie potrzebuje uwierzytelnienia Postiz — dopiero upload go wymaga. Jeśli rekord nie ma obrazu, ten węzeł zwróci błąd; media są w tym szablonie traktowane jako wymagane."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Airtable').item.json['Video URL'] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "14200a11-cf6a-4ca4-b158-3215db82d2d5",
+      "name": "Grab Video from Airtable",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -256,
+        656
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Pobiera plik wideo z Airtable jako dane binarne — analogicznie do pobrania obrazu, drugi krok obsługi mediów.\n\nMECHANIZM: HTTP Request GET pod adres z kolumny Video URL rekordu ({{ $('Airtable').item.json['Video URL'] }}), Response Format = File.\n\nWEJŚCIE: URL wideo z rekordu Airtable.\nWYJŚCIE: binarny plik wideo → do Upload Video to Postiz.\n\nUWAGA: nie każda platforma docelowa obsługuje wideo (zależy od ustawień kanału w Postiz) — obraz jest bezpieczniejszym wspólnym mianownikiem. Jeśli rekord nie ma wideo, węzeł zwróci błąd."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"schedule\",\n  \"shortLink\": false,\n  \"date\": \"{{ $now.plus({hours: 24}).toISO() }}\",\n  \"tags\": [],\n  \"posts\": [{\n    \"integration\": {\n      \"id\": \"{{ $('Prepare for Publish').item.json.devto_id }}\"\n    },\n    \"value\": [{\n      \"content\": {{ $('Prepare for Publish').item.json.final_text_long.toJsonString() }},\n      \"image\": [{\n        \"id\": \"{{ $('Upload Image to Postiz').item.json.id }}\",\n        \"path\": \"{{ $('Upload Image to Postiz').item.json.path }}\"\n      }]\n    }],\n    \"group\": \"postiz_n8n_apex_{{ $now.toMillis() }}\",\n    \"settings\": {\n      \"title\": \"{{ $('Airtable').item.json['Media Title'] }}\"\n    }\n  }]\n}",
+        "options": {}
+      },
+      "id": "a41e3d3e-1693-49a3-b012-9c61bed6cbbb",
+      "name": "Dev.to Postiz - POST NOW!",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        192,
+        80
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "onError": "continueErrorOutput",
+      "notes": "ROLA: Tworzy i planuje post na Dev.to przez API Postiz. Jeden z czterech równoległych węzłów publikujących.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/posts. Ciało JSON zawiera: type \"schedule\" (post zaplanowany, nie natychmiastowy), date = {{ $now.plus({hours: 24}).toISO() }} (publikacja za 24 h — różne offsety na platformach rozkładają posty w czasie), content = final_text_long z Prepare for Publish, image = id i path z Upload Image to Postiz, oraz integration.id = devto_id (ID kanału Dev.to). Dev.to nie wymaga dodatkowych pól — wystarczy title z Media Title.\n\nUWIERZYTELNIENIE: nagłówek Authorization = klucz API Postiz (Header Auth).\n\nWEJŚCIE: bezpośrednio z Upload Video to Postiz.\n\nOBSŁUGA BŁĘDU (kluczowe): węzeł ma onError = continueErrorOutput, czyli DWA wyjścia. Wyjście 0 (sukces) → zapis statusu sukcesu w Airtable. Wyjście 1 (błąd) → zapis statusu porażki w Airtable. Dzięki temu nieudana publikacja na Dev.to NIE zatrzymuje pozostałych platform — każda gałąź jest niezależna.\n\nKONFIGURACJA: uzupełnij devto_id w węźle Prepare for Publish. Zmień offset czasowy, jeśli chcesz inny harmonogram (albo type \"now\" dla publikacji natychmiastowej)."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | DevTo Success | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "08eb569c-d56b-4a76-96ff-ee6194820e1f",
+      "name": "Airtable: Posted DevTo",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        416,
+        -16
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status SUKCESU publikacji na DevTo. Podłączony do gałęzi sukcesu (wyjście 0) węzła publikującego DevTo.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | DevTo Success | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego DevTo (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | DevTo FAILED | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "7fd1bf6d-efc7-45bb-91f0-1ff9ac306a76",
+      "name": "Airtable: Post DevTo - Fail",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        416,
+        176
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status PORAŻKI publikacji na DevTo. Podłączony do gałęzi błędu (wyjście 1, onError) węzła publikującego DevTo.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | DevTo FAILED | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego DevTo (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n. Odnotowanie porażki pozwala później zdiagnozować, która platforma zawiodła, i ponowić publikację ręcznie."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/upload",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f2125c3f-eb4c-4963-a420-ec714d7a5eaf",
+      "name": "Upload Video to Postiz",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -32,
+        656
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Wysyła wideo do magazynu Postiz (zwraca id i path) ORAZ pełni funkcję rozdzielacza przepływu — to z niego workflow rozgałęzia się na wszystkie platformy i powiadomienie.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/upload, multipart/form-data, Authorization = klucz Postiz.\n\nWEJŚCIE: binarny plik wideo z Grab Video from Airtable.\nWYJŚCIE (PIĘĆ równoległych połączeń): (1) Dev.to Postiz, (2) Wait → Hashnode, (3) Wordpress Postiz, (4) Wait1 → Dribble, (5) Telegram: User Update. Domyka etap mediów; od tego węzła zaczyna się fan-out publikacji.\n\nDLACZEGO TU JEST ROZGAŁĘZIENIE: dopiero po wgraniu obu mediów (obraz i wideo) mamy komplet referencji, więc publikacja na wszystkie platformy rusza równolegle stąd. Kolejność mediów jest sekwencyjna: obraz przed wideo."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"schedule\",\n  \"shortLink\": false,\n  \"date\": \"{{ $now.plus({hours: 23}).toISO() }}\",\n  \"tags\": [],\n  \"posts\": [{\n    \"integration\": {\n      \"id\": \"{{ $('Prepare for Publish').item.json.hashnode_id }}\"\n    },\n    \"value\": [{\n      \"content\": {{ $('Prepare for Publish').item.json.final_text_long.toJsonString() }},\n      \"image\": [{\n        \"id\": \"{{ $('Upload Image to Postiz').item.json.id }}\",\n        \"path\": \"{{ $('Upload Image to Postiz').item.json.path }}\"\n      }]\n    }],\n    \"group\": \"postiz_n8n_apex_{{ $now.toMillis() }}\",\n    \"settings\": {\n      \"title\": \"{{ $('Airtable').item.json['Media Title'] }}\",\n      \"publication\": \"aiwithapex\",\n      \"tags\": [\n        {\n          \"value\": \"ai\",\n          \"label\": \"ai\"\n        },\n        {\n          \"value\": \"technology\",\n          \"label\": \"technology\"\n        }\n      ]\n    }\n  }]\n}",
+        "options": {}
+      },
+      "id": "e5a01172-a683-4b41-a030-9a00bd263e07",
+      "name": "Hashnode Postiz - POST NOW!1",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        416,
+        368
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "onError": "continueErrorOutput",
+      "notes": "ROLA: Tworzy i planuje post na Hashnode przez API Postiz. Jeden z czterech równoległych węzłów publikujących.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/posts. Ciało JSON zawiera: type \"schedule\" (post zaplanowany, nie natychmiastowy), date = {{ $now.plus({hours: 23}).toISO() }} (publikacja za 23 h — różne offsety na platformach rozkładają posty w czasie), content = final_text_long z Prepare for Publish, image = id i path z Upload Image to Postiz, oraz integration.id = hashnode_id (ID kanału Hashnode). UWAGA: Hashnode wymaga w settings dodatkowo publication (nazwa Twojej publikacji Hashnode) i tags jako obiektów — bez tego API odrzuci post. Poprzedza go węzeł Wait.\n\nUWIERZYTELNIENIE: nagłówek Authorization = klucz API Postiz (Header Auth).\n\nWEJŚCIE: sygnał z węzła Wait (po pauzie).\n\nOBSŁUGA BŁĘDU (kluczowe): węzeł ma onError = continueErrorOutput, czyli DWA wyjścia. Wyjście 0 (sukces) → zapis statusu sukcesu w Airtable. Wyjście 1 (błąd) → zapis statusu porażki w Airtable. Dzięki temu nieudana publikacja na Hashnode NIE zatrzymuje pozostałych platform — każda gałąź jest niezależna.\n\nKONFIGURACJA: uzupełnij hashnode_id w węźle Prepare for Publish. Zmień offset czasowy, jeśli chcesz inny harmonogram (albo type \"now\" dla publikacji natychmiastowej)."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Hashnode Success | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8b4f8390-9f31-471d-9345-b3437b53cf95",
+      "name": "Airtable: Posted Hashnode",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        640,
+        272
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status SUKCESU publikacji na Hashnode. Podłączony do gałęzi sukcesu (wyjście 0) węzła publikującego Hashnode.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Hashnode Success | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Hashnode (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Hashnode FAIL | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4d3ba7d0-9841-4ea6-86f8-904774ef7356",
+      "name": "Airtable: Failed Post Hashnode",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        640,
+        560
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status PORAŻKI publikacji na Hashnode. Podłączony do gałęzi błędu (wyjście 1, onError) węzła publikującego Hashnode.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Hashnode FAILED | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Hashnode (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n. Odnotowanie porażki pozwala później zdiagnozować, która platforma zawiodła, i ponowić publikację ręcznie."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Wordpress Success | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "96a64ceb-5150-4df9-a3a3-0e96958174ac",
+      "name": "Airtable: Posted Wordpress",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        416,
+        560
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status SUKCESU publikacji na Wordpress. Podłączony do gałęzi sukcesu (wyjście 0) węzła publikującego Wordpress.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Wordpress Success | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Wordpress (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Wordpress FAIL | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "2eace203-df9c-499d-b836-f17c1ab4275b",
+      "name": "Airtable: Failed Post Wordpress",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        416,
+        752
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status PORAŻKI publikacji na Wordpress. Podłączony do gałęzi błędu (wyjście 1, onError) węzła publikującego Wordpress.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Wordpress FAILED | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Wordpress (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n. Odnotowanie porażki pozwala później zdiagnozować, która platforma zawiodła, i ponowić publikację ręcznie."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"schedule\",\n  \"shortLink\": false,\n  \"date\": \"{{ $now.plus({hours: 25}).toISO() }}\",\n  \"tags\": [],\n  \"posts\": [{\n    \"integration\": {\n      \"id\": \"{{ $('Prepare for Publish').item.json.wordpress_id }}\"\n    },\n    \"value\": [{\n      \"content\": {{ $('Prepare for Publish').item.json.final_text_long.toJsonString() }},\n      \"image\": [{\n        \"id\": \"{{ $('Upload Image to Postiz').item.json.id }}\",\n        \"path\": \"{{ $('Upload Image to Postiz').item.json.path }}\"\n      }]\n    }],\n    \"group\": \"postiz_n8n_apex_{{ $now.toMillis() }}\",\n    \"settings\": {\n      \"title\": \"{{ $('Airtable').item.json['Media Title'] }}\",\n      \"type\": \"post\"\n    }\n  }]\n}",
+        "options": {}
+      },
+      "id": "223f792e-5e2f-4a74-a849-53cca66a1497",
+      "name": "Wordpress Postiz - POST NOW!",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        192,
+        656
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "onError": "continueErrorOutput",
+      "notes": "ROLA: Tworzy i planuje post na WordPress przez API Postiz. Jeden z czterech równoległych węzłów publikujących.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/posts. Ciało JSON zawiera: type \"schedule\" (post zaplanowany, nie natychmiastowy), date = {{ $now.plus({hours: 25}).toISO() }} (publikacja za 25 h — różne offsety na platformach rozkładają posty w czasie), content = final_text_long z Prepare for Publish, image = id i path z Upload Image to Postiz, oraz integration.id = wordpress_id (ID kanału WordPress). UWAGA: WordPress wymaga w settings pola type o wartości post lub page.\n\nUWIERZYTELNIENIE: nagłówek Authorization = klucz API Postiz (Header Auth).\n\nWEJŚCIE: bezpośrednio z Upload Video to Postiz.\n\nOBSŁUGA BŁĘDU (kluczowe): węzeł ma onError = continueErrorOutput, czyli DWA wyjścia. Wyjście 0 (sukces) → zapis statusu sukcesu w Airtable. Wyjście 1 (błąd) → zapis statusu porażki w Airtable. Dzięki temu nieudana publikacja na WordPress NIE zatrzymuje pozostałych platform — każda gałąź jest niezależna.\n\nKONFIGURACJA: uzupełnij wordpress_id w węźle Prepare for Publish. Zmień offset czasowy, jeśli chcesz inny harmonogram (albo type \"now\" dla publikacji natychmiastowej)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"schedule\",\n  \"shortLink\": false,\n  \"date\": \"{{ $now.plus({hours: 30}).toISO() }}\",\n  \"tags\": [],\n  \"posts\": [{\n    \"integration\": {\n      \"id\": \"{{ $('Prepare for Publish').item.json.dribble_id }}\"\n    },\n    \"value\": [{\n      \"content\": {{ $('Prepare for Publish').item.json.final_text_long.toJsonString() }},\n      \"image\": [{\n        \"id\": \"{{ $('Upload Image to Postiz').item.json.id }}\",\n        \"path\": \"{{ $('Upload Image to Postiz').item.json.path }}\"\n      }]\n    }],\n    \"group\": \"postiz_n8n_apex_{{ $now.toMillis() }}\",\n    \"settings\": {\n      \"title\": \"{{ $('Airtable').item.json['Media Title'] }}\"\n    }\n  }]\n}",
+        "options": {}
+      },
+      "id": "7f3b6714-3016-4d01-9eda-b00ff5f6161f",
+      "name": "Dribble Postiz - POST NOW!1",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        416,
+        944
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "onError": "continueErrorOutput",
+      "notes": "ROLA: Tworzy i planuje post na Dribbble przez API Postiz. Jeden z czterech równoległych węzłów publikujących.\n\nMECHANIZM: HTTP Request POST na https://api.postiz.com/public/v1/posts. Ciało JSON zawiera: type \"schedule\" (post zaplanowany, nie natychmiastowy), date = {{ $now.plus({hours: 30}).toISO() }} (publikacja za 30 h — różne offsety na platformach rozkładają posty w czasie), content = final_text_long z Prepare for Publish, image = id i path z Upload Image to Postiz, oraz integration.id = dribble_id (ID kanału Dribbble). Poprzedza go węzeł Wait1. Dribbble to platforma wizualna — dopilnuj, by post miał sensowny obraz.\n\nUWIERZYTELNIENIE: nagłówek Authorization = klucz API Postiz (Header Auth).\n\nWEJŚCIE: sygnał z węzła Wait (po pauzie).\n\nOBSŁUGA BŁĘDU (kluczowe): węzeł ma onError = continueErrorOutput, czyli DWA wyjścia. Wyjście 0 (sukces) → zapis statusu sukcesu w Airtable. Wyjście 1 (błąd) → zapis statusu porażki w Airtable. Dzięki temu nieudana publikacja na Dribbble NIE zatrzymuje pozostałych platform — każda gałąź jest niezależna.\n\nKONFIGURACJA: uzupełnij dribble_id w węźle Prepare for Publish. Zmień offset czasowy, jeśli chcesz inny harmonogram (albo type \"now\" dla publikacji natychmiastowej)."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Dribble Success | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5403409f-9656-4323-9167-0fa7876dea18",
+      "name": "Airtable: Posted Dribble",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        640,
+        752
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status SUKCESU publikacji na Dribble. Podłączony do gałęzi sukcesu (wyjście 0) węzła publikującego Dribble.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Dribble Success | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Dribble (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": "appG0wM9Oe2bp1qhh",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh",
+          "cachedResultName": "Social Media System"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": "tblM3kDu1qB2FdTOF",
+          "cachedResultUrl": "https://airtable.com/appG0wM9Oe2bp1qhh/tblM3kDu1qB2FdTOF",
+          "cachedResultName": "Media Creation"
+        },
+        "columns": {
+          "value": {
+            "id": "={{ $('Airtable').item.json.id }}",
+            "Publishing Log": "={{ $('Airtable').item.json['Publishing Log'] }} | Dribble FAIL | "
+          },
+          "schema": [
+            {
+              "id": "id",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": true,
+              "required": false,
+              "displayName": "id",
+              "defaultMatch": true
+            },
+            {
+              "id": "Media Title",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Media Title",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Script",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Script Len",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Script Len",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Production",
+              "type": "options",
+              "display": true,
+              "options": [
+                {
+                  "name": "Not Started",
+                  "value": "Not Started"
+                },
+                {
+                  "name": "In progress",
+                  "value": "In progress"
+                },
+                {
+                  "name": "Ready",
+                  "value": "Ready"
+                },
+                {
+                  "name": "Review",
+                  "value": "Review"
+                },
+                {
+                  "name": "Completed",
+                  "value": "Completed"
+                },
+                {
+                  "name": "Scheduled",
+                  "value": "Scheduled"
+                },
+                {
+                  "name": "Published",
+                  "value": "Published"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Production",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Video",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Video",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Date (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Date (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publish Time (from Content Creation)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Publish Time (from Content Creation)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Test",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Test",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Content Creation",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Content Creation",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Scenes",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Scenes",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image URL",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image URL",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image",
+              "type": "array",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Image Caption",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Image Caption",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for X",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for X",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Text for LinkedIn",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Text for LinkedIn",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Social Channels",
+              "type": "array",
+              "display": true,
+              "options": [
+                {
+                  "name": "Blog",
+                  "value": "Blog"
+                },
+                {
+                  "name": "Facebook",
+                  "value": "Facebook"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                },
+                {
+                  "name": "TikTok",
+                  "value": "TikTok"
+                },
+                {
+                  "name": "X",
+                  "value": "X"
+                },
+                {
+                  "name": "YouTube",
+                  "value": "YouTube"
+                }
+              ],
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Social Channels",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Date",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Date",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "n8n Publishing Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "n8n Publishing Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Publishing Log",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "readOnly": false,
+              "required": false,
+              "displayName": "Publishing Log",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "House Keeping",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": false,
+              "required": false,
+              "displayName": "House Keeping",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflowId (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "workflowId (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recordID (from House Keeping)",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "recordID (from House Keeping)",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Created Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Created Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Modified Time",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Modified Time",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Record ID",
+              "type": "string",
+              "display": true,
+              "removed": true,
+              "readOnly": true,
+              "required": false,
+              "displayName": "Record ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "id"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "229825db-a775-442c-a464-38eaae6506f8",
+      "name": "Airtable: Failed Post Dribble",
+      "type": "n8n-nodes-base.airtable",
+      "position": [
+        640,
+        1040
+      ],
+      "typeVersion": 2.1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zapisuje w rekordzie Airtable status PORAŻKI publikacji na Dribble. Podłączony do gałęzi błędu (wyjście 1, onError) węzła publikującego Dribble.\n\nMECHANIZM: operacja update rekordu. Dopisuje do kolumny Publishing Log tekst \" | Dribble FAILED | \" (log narasta — każda platforma dokłada swój wpis, więc w jednym polu widać historię całego przebiegu). Rekord identyfikowany po polu id = {{ $('Airtable').item.json.id }}.\n\nWEJŚCIE: wynik węzła publikującego Dribble (odpowiednia gałąź).\nWYJŚCIE: brak dalszych węzłów — to liść gałęzi raportowania.\n\nPO CO: warstwa raportowania per platforma. Zespół widzi w Airtable, co się opublikowało, a co nie, bez zaglądania do logów n8n. Odnotowanie porażki pozwala później zdiagnozować, która platforma zawiodła, i ponowić publikację ręcznie."
+    },
+    {
+      "parameters": {
+        "content": "### Możesz wstawić tu wprost Record ID do łatwego testowania",
+        "height": 252,
+        "width": 196,
+        "color": 5
+      },
+      "id": "f4e8fbda-e6e1-4a59-bc1d-48d7a47b3a7a",
+      "name": "Sticky Note8",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1408,
+        544
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "Obsługa mediów",
+        "width": 848,
+        "color": 5
+      },
+      "id": "3f76f115-724b-4b41-b215-0a9d4979a5f0",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -752,
+        656
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "# Zaplanuj i opublikuj!",
+        "height": 1264,
+        "width": 608,
+        "color": 3
+      },
+      "id": "22d0d705-ca84-4394-96ae-d5e75db2b6b6",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        -64
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Hashnode Postiz - POST NOW!1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Dribble Postiz - POST NOW!1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Record ID": {
+      "main": [
+        [
+          {
+            "node": "Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Publish": {
+      "main": [
+        [
+          {
+            "node": "Grab Image from Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: User Update": {
+      "main": [
+        [
+          {
+            "node": "Update Managing Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Managing Agent": {
+      "main": [
+        [
+          {
+            "node": "Finalize Transaction!",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Image to Postiz": {
+      "main": [
+        [
+          {
+            "node": "Grab Video from Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Video to Postiz": {
+      "main": [
+        [
+          {
+            "node": "Dev.to Postiz - POST NOW!",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wordpress Postiz - POST NOW!",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram: User Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grab Image from Airtable": {
+      "main": [
+        [
+          {
+            "node": "Upload Image to Postiz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grab Video from Airtable": {
+      "main": [
+        [
+          {
+            "node": "Upload Video to Postiz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dev.to Postiz - POST NOW!": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Posted DevTo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Post DevTo - Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dribble Postiz - POST NOW!1": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Posted Dribble",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Failed Post Dribble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hashnode Postiz - POST NOW!1": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Posted Hashnode",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Failed Post Hashnode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wordpress Postiz - POST NOW!": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Posted Wordpress",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Failed Post Wordpress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook from Content Creation": {
+      "main": [
+        [
+          {
+            "node": "Airtable Record ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "ee19a228-b3fa-49ed-9f08-75d1740942cd",
+  "activeVersionId": null,
+  "versionCounter": 11,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-06T15:59:55.433Z",
+      "createdAt": "2026-07-06T15:59:55.433Z",
+      "role": "workflow:owner",
+      "workflowId": "xDyLYr3jwWRz7i38",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

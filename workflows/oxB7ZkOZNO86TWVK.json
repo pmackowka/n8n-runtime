@@ -1,0 +1,209 @@
+{
+  "updatedAt": "2026-09-03T15:18:50.558Z",
+  "createdAt": "2026-09-03T11:40:01.050Z",
+  "id": "oxB7ZkOZNO86TWVK",
+  "name": "017 — Webhook portfela akcji dla agenta ElevenLabs (AI Agent, OpenRouter, Google Sheets Tool)",
+  "description": "Webhook (POST) wywoływany przez narzędzie webhook agenta ElevenLabs. AI Agent (OpenRouter, openai/gpt-oss-120b) odpowiada na pytania o portfel akcji, korzystając z narzędzia Google Sheets Tool (dokument/arkusz jeszcze nie podłączony). Respond to Webhook z",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stock-portfolio-question",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f9cf1cd2-d16d-4277-86ff-deb9b6039755",
+      "name": "Webhook z ElevenLabs",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "8769911f-bed9-4cbb-895e-f261b3f7aa1a",
+      "notes": "To węzeł startowy (trigger) tego workflow — nasłuchuje na żądania POST wysyłane pod adres .../webhook/stock-portfolio-question. Wywołuje go narzędzie webhook (ask_portfolio_specialist) podpięte do agenta głosowego ElevenLabs, gdy użytkownik zapyta o swój portfel akcji. Oczekiwane ciało żądania to JSON z polem question, zawierającym konkretne pytanie do przekazania dalej. Tryb odpowiedzi ustawiony jest na responseNode, więc workflow nie odpowiada od razu — czeka, aż wykona się węzeł Odpowiedz na webhook na końcu łańcucha. Produkcyjny URL zacznie realnie działać dopiero po aktywacji tego workflow."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body?.question ?? $json.question ?? \"\" }}",
+        "options": {
+          "systemMessage": "Jesteś asystentem specjalistą od portfela akcji użytkownika. Masz dostęp do narzędzia \"Odczytaj portfel akcji\", które czyta arkusz Google Sheets z portfelem inwestycyjnym. Używaj go, gdy pytanie dotyczy liczby posiadanych akcji, tickerów lub składu portfela. Odpowiadaj krótko i konkretnie, jednym-dwoma zdaniami, jakby odpowiadał agent głosowy."
+        }
+      },
+      "id": "1fd60d88-0bb0-4e15-94b2-6875427723a8",
+      "name": "Agent portfela akcji",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Główny węzeł orkiestrujący workflow — agent AI z biblioteki LangChain, który interpretuje pytanie odebrane z webhooka i decyduje, czy potrzebuje sięgnąć po narzędzie Odczytaj portfel akcji. Treść pytania pobiera wyrażeniem z pola body.question przychodzącego z węzła Webhook z ElevenLabs (z zapasowym odczytem $json.question, gdyby dane trafiły bez zagnieżdżenia w body). Model językowy podłączony jest przez port ai_languageModel (OpenRouter Chat Model), a systemMessage instruuje go, by odpowiadał krótko i konkretnie, jak głosowy asystent. Wynik trafia w polu output do węzła Odpowiedz na webhook, który odsyła go z powrotem do agenta ElevenLabs. Nie ma podpiętej pamięci konwersacji — każde wywołanie webhooka jest traktowane jako niezależne, jednorazowe pytanie."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "6ce2a48c-0e15-4173-afd7-1594c8a99694",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        232,
+        232
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla węzła Agent portfela akcji, podłączony przez OpenRouter — pośrednika dającego dostęp do wielu modeli LLM przez jedno API. Skonfigurowany model to darmowy openai/gpt-oss-120b, jedyny potwierdzony jako działający na tym koncie OpenRouter. Węzeł nie działa samodzielnie w głównym przepływie danych — pełni rolę silnika myślenia agenta, podłączony specjalnym połączeniem ai_languageModel, a nie main. Korzysta z istniejącego credentiala OpenRouter account. Bez tego węzła agent nie miałby żadnego modelu do generowania odpowiedzi ani do decydowania o użyciu narzędzia."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "9be4dc1f-61f0-4c9e-aba7-8dcf662c7211",
+      "name": "Odczytaj portfel akcji",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        360,
+        232
+      ],
+      "notes": "Narzędzie (tool) udostępnione agentowi do odczytu danych z arkusza Google Sheets zawierającego portfel inwestycyjny użytkownika. Agent wywołuje je, gdy pytanie dotyczy liczby posiadanych akcji, konkretnego tickera lub ogólnego składu portfela. Parametry documentId i sheetName są na razie puste (placeholder) — brakuje credentiala Google Sheets w tej instancji, więc narzędzie nie zadziała, dopóki użytkownik nie doda konta Google i nie wskaże konkretnego dokumentu oraz arkusza. Do czasu tej konfiguracji workflow nie da się aktywować (publish_workflow blokuje aktywację z powodu brakujących pól). Podłączony jest do agenta przez port ai_tool, a nie główny przepływ danych."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "cd26598e-bc50-403f-af8e-acc4c8f6605f",
+      "name": "Odpowiedz na webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        576,
+        0
+      ],
+      "notes": "Węzeł kończący workflow — zwraca odpowiedź agenta z powrotem do wywołującego, czyli do narzędzia webhook w agencie ElevenLabs. Ustawiony na respondWith: firstIncomingItem, więc odsyła bez modyfikacji całą zawartość pierwszego elementu otrzymanego z węzła Agent portfela akcji (obiekt JSON z polem output zawierającym tekstową odpowiedź). Działa tylko dlatego, że węzeł Webhook z ElevenLabs ma ustawiony responseMode na responseNode — bez tego ustawienia ten węzeł nie miałby efektu. To domyka pętlę: agent głosowy pyta, n8n odpowiada, agent głosowy przekazuje odpowiedź użytkownikowi."
+    },
+    {
+      "parameters": {
+        "content": "## Webhook portfela akcji dla agenta ElevenLabs\n\nTen workflow odpowiada na pytania o portfel akcji użytkownika, zadawane głosowo przez agenta ElevenLabs poprzez narzędzie webhook (ask_portfolio_specialist).\n\n**Proces krok po kroku:**\n1. Użytkownik pyta głosowo agenta ElevenLabs o swój portfel akcji.\n2. Agent ElevenLabs wywołuje narzędzie `ask_portfolio_specialist` → POST na `/webhook/stock-portfolio-question` z JSON `{ question }`.\n3. Węzeł **Webhook z ElevenLabs** odbiera żądanie → przekazuje pytanie do **Agent portfela akcji**.\n4. **Agent portfela akcji** (OpenRouter, `openai/gpt-oss-120b`) analizuje pytanie → jeśli dotyczy akcji lub tickerów, wywołuje narzędzie **Odczytaj portfel akcji**.\n5. **Odczytaj portfel akcji** czyta arkusz Google Sheets z portfelem → zwraca dane do agenta.\n6. Agent formułuje krótką, głosową odpowiedź → **Odpowiedz na webhook** odsyła ją jako JSON.\n7. Agent ElevenLabs odbiera odpowiedź → przekazuje ją głosowo użytkownikowi.\n\n**Zanim to zadziała**: dodaj credential Google Sheets i wskaż dokument/arkusz na węźle „Odczytaj portfel akcji” (pola są puste) — dopiero wtedy workflow da się aktywować. Do testu z prawdziwym agentem ElevenLabs potrzebny jest tunel z HTTPS (np. ngrok) wystawiający port 5678 publicznie — `localhost` nie jest widoczny z jego chmury, a ElevenLabs wymaga HTTPS dla URL narzędzia.",
+        "height": 480,
+        "width": 1244,
+        "color": 4
+      },
+      "id": "592fd68d-2ca3-4599-9ed2-8c92d91859b0",
+      "name": "Podsumowanie workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook z ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Agent portfela akcji",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent portfela akcji": {
+      "main": [
+        [
+          {
+            "node": "Odpowiedz na webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent portfela akcji",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Odczytaj portfel akcji": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent portfela akcji",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "6edfed3c-2bd3-4d0f-a166-c5cc4a6b1223",
+  "activeVersionId": null,
+  "versionCounter": 6,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-03T11:40:01.051Z",
+      "createdAt": "2026-09-03T11:40:01.051Z",
+      "role": "workflow:owner",
+      "workflowId": "oxB7ZkOZNO86TWVK",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

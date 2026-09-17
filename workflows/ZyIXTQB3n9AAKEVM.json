@@ -1,0 +1,263 @@
+{
+  "updatedAt": "2026-09-05T13:07:23.420Z",
+  "createdAt": "2026-09-05T06:49:08.459Z",
+  "id": "ZyIXTQB3n9AAKEVM",
+  "name": "022 — Wyszukiwanie w sieci przez Firecrawl (AI Agent, Structured Output Parser, OpenRouter)",
+  "description": "Chat Trigger → AI Agent (OpenRouter, structured output: searchQuery) → Fire Crawl (resource MapSearch/search) → Set (reshape do {output} dla czatu). Placeholder na credential Fire Crawl API.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e19ef5c2-ef47-4c54-b4c6-cd09a602e39c",
+      "name": "Wiadomość na czacie",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "dc12c7ef-e31e-4e1b-9beb-a73c6fb0c3a6",
+      "notes": "Węzeł startowy (trigger) tego workflow — wbudowany czat n8n, uruchamiany bezpośrednio z przeglądarki bez potrzeby publicznego adresu HTTPS (w przeciwieństwie do triggerów Telegram/Slack/webhook). Odbiera treść wiadomości użytkownika i przekazuje ją dalej jako chatInput do węzła Generator zapytania wyszukiwania, gdzie domyślne promptType: auto odczytuje ją automatycznie. Od tego węzła zaczyna się cały przepływ: pytanie użytkownika trafia najpierw do agenta, potem do Fire Crawl, a jego wynik rozchodzi się na dwie równoległe gałęzie (odpowiedź w czacie i publikacja na webhook.site). Brak pamięci konwersacji (Simple Memory) — każda wiadomość na czacie traktowana jest jako niezależne zapytanie, bez kontekstu poprzednich wiadomości."
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Tworzysz zapytania do wyszukiwania w internecie, aby jak najlepiej odpowiedzieć na pytanie użytkownika."
+        }
+      },
+      "id": "c2a17481-3ab7-4c6f-8dc7-dba1534d36a6",
+      "name": "Generator zapytania wyszukiwania",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "AI Agent, którego jedynym zadaniem jest przekształcenie pytania użytkownika z węzła Wiadomość na czacie w zwięzłe zapytanie wyszukiwania internetowego — sam nie odpowiada na pytanie, tylko generuje search query dla kolejnego kroku. Model podłączony przez subnode OpenRouter Chat Model, promptType nie jest ustawione jawnie (czyli działa domyślne auto — pobiera treść wiadomości bezpośrednio z Chat Triggera), a monit systemowy jawnie instruuje model, by tworzył zapytania wyszukiwania zamiast normalnej odpowiedzi. hasOutputParser: true wymusza podłączenie Structured Output Parser jako subnode'a outputParser — bez tego węzeł Fire Crawl, który czyta $json.output.searchQuery, nie miałby skąd wziąć wartości. Węzeł nie ma podłączonych żadnych narzędzi (tools) ani pamięci konwersacji — to celowo najprostsza możliwa konfiguracja agenta, ograniczona do jednego zadania."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "d1ee4cd1-7283-4748-8ec4-26303fe58f60",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode model do agenta Generator zapytania wyszukiwania — dostarcza samo rozumowanie potrzebne do przekształcenia pytania w zapytanie wyszukiwania, nie jest osobnym krokiem na głównym przepływie danych. Ustawiony na darmowy model openai/gpt-oss-120b z realnie podłączonym credentialem OpenRouter account, zgodnie z domyślną konfiguracją LLM w tej instancji — płatne modele OpenRouter nie działają na tym koncie. Ponieważ agent ma włączone hasOutputParser, ten sam model odpowiada też za dopasowanie wyjścia do schematu z węzła Structured Output Parser. Brak dodatkowych opcji (temperature, maxTokens) — użyte są wartości domyślne node'a."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"searchQuery\": \"wyszukiwanie w internecie\" }"
+      },
+      "id": "d4c2d5db-f329-4de2-89df-e605a7e3ea62",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        240
+      ],
+      "notes": "Subnode outputParser podłączony do agenta Generator zapytania wyszukiwania — wymusza, by wyjście agenta było zgodne z zadanym kształtem JSON, zamiast dowolnego tekstu. Schemat zdefiniowany przez przykład: pojedyncze pole searchQuery z przykładową wartością tekstową (schemaType nie jest ustawione jawnie — fromJson to i tak wartość domyślna node'a). Dzięki temu wynik agenta trafia do $json.output.searchQuery (pole output dodaje sam parser), co czyta bezpośrednio następny węzeł, Fire Crawl — wyszukiwanie w sieci, jako treść zapytania. Bez autoFix — jeśli model wygeneruje niezgodny JSON, workflow zwróci błąd zamiast automatycznie próbować go naprawić dodatkowym wywołaniem LLM."
+    },
+    {
+      "parameters": {
+        "resource": "MapSearch",
+        "operation": "search",
+        "query": "={{ $json.output.searchQuery }}",
+        "requestOptions": {}
+      },
+      "id": "6dd58925-5a8e-4f98-9bf6-46fa890e1b9c",
+      "name": "Fire Crawl — wyszukiwanie w sieci",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        576,
+        0
+      ],
+      "credentials": {
+        "firecrawlApi": {
+          "id": "Xt8FsuNO9woKsSSi",
+          "name": "Firecrawl account"
+        }
+      },
+      "notes": "Węzeł community node'a Fire Crawl (@mendable/n8n-nodes-firecrawl, zainstalowany ręcznie w tej instancji) — resource MapSearch, operacja search, czyli wyszukiwanie stron w sieci na podstawie zapytania tekstowego, ze zwróconą i wstępnie zeskrobaną treścią wyników. Zapytanie pochodzi z {{ $json.output.searchQuery }}, czyli z pola wygenerowanego przez agenta i wymuszonego przez Structured Output Parser — nie jest wpisane ręcznie. Pole sources nie jest ustawione jawnie, więc obowiązuje domyślne zachowanie node'a — wyszukiwanie ograniczone do źródła web (bez news i images). Wynik tego węzła rozchodzi się na dwie równoległe gałęzie: Przygotuj odpowiedź czatu (odpowiedź w oknie czatu) i Wyślij wynik na webhook.site (publikacja tego samego surowego JSON-a na zewnętrzny endpoint testowy) — obie czytają dokładnie ten sam wynik, niezależnie od siebie. Korzysta z credentiala Firecrawl account — na razie pusty placeholder (newCredential), użytkownik musi wkleić realny klucz API z dashboardu firecrawl.dev, zanim workflow zadziała."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "chat-output",
+              "name": "output",
+              "value": "={{ JSON.stringify($json) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fc820d2f-48f8-445d-8148-dc2139df4049",
+      "name": "Przygotuj odpowiedź czatu",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        0
+      ],
+      "notes": "Jedna z dwóch równoległych gałęzi zasilanych bezpośrednio z Fire Crawl — ta odpowiada za wyświetlenie wyniku w oknie czatu, niezależnie od drugiej gałęzi (Wyślij wynik na webhook.site). Potrzebny ze względu na domyślny responseMode: lastNode Chat Triggera — w tym trybie panel czatu oczekuje, że ostatni wykonany węzeł na danej ścieżce zwróci pole output z tekstem odpowiedzi, a surowy wynik Fire Crawl (obiekt z listą stron) tego kształtu nie ma. Węzeł pakuje cały JSON z Fire Crawl do jednego pola tekstowego output przez JSON.stringify($json), żeby okno czatu miało co wyświetlić zamiast zwrócić błąd albo pustą odpowiedź. To rozwiązanie czysto demonstracyjne — pokazuje surowe wyniki wyszukiwania jako string, nie formatuje ich w żaden czytelny sposób. includeOtherFields: false, więc pole output jest jedyną wartością w wyniku tego węzła."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "04c4d565-260f-4c56-a63b-fafbaa1f96e4",
+      "name": "Wyślij wynik na webhook.site (HTTP Request)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        224
+      ],
+      "notes": "Druga z dwóch równoległych gałęzi zasilanych bezpośrednio z Fire Crawl (obok Przygotuj odpowiedź czatu) — celowo generyczny node HTTP Request zamiast dedykowanej integracji, wybrany świadomie w tej lekcji do zademonstrowania ogólnego mechanizmu wysyłania żądań HTTP z n8n. Wysyła żądanie POST z Content-Type: JSON, gdzie ciałem żądania jest całe wyrażenie {{ $json }} — czyli surowy, niezmieniony wynik Fire Crawl, bez żadnego formatowania ani wyboru pól. Adres docelowy (pole url) to jednorazowy, unikalny endpoint z serwisu webhook.site, który bez logowania i kluczy API pozwala natychmiast podejrzeć treść przychodzących żądań — służy wyłącznie do ręcznego testowania i podglądu danych, nie jest częścią żadnej integracji produkcyjnej. Pole url jest obecnie puste (placeholder) — użytkownik musi wkleić tam swój aktualny adres z webhook.site, bo jest on sesyjny i zmienia się przy każdej wizycie na tej stronie. authentication: none, bo webhook.site nie wymaga żadnej autoryzacji."
+    },
+    {
+      "parameters": {
+        "content": "## Fire Crawl — wyszukiwanie w sieci sterowane przez AI Agenta\n\nUżytkownik zadaje dowolne pytanie w panelu czatu; AI Agent (OpenRouter, openai/gpt-oss-120b) zamienia je w zwięzłe zapytanie wyszukiwania, wymuszone przez Structured Output Parser na format { searchQuery: string }. Zapytanie trafia do community node'a Fire Crawl (resource MapSearch, operacja search), który przeszukuje sieć i zwraca zeskrobane wyniki — stąd rozchodzą się dwie równoległe gałęzie. Jedna pakuje wynik do pola output, żeby panel czatu miał co wyświetlić; druga wysyła ten sam surowy JSON generycznym node'em HTTP Request na zewnętrzny, testowy endpoint (webhook.site), żeby zobaczyć dokładną zawartość odpowiedzi poza n8n. **Do działania wymagane są dwie rzeczy**: realny klucz API wklejony do credentiala Firecrawl account (obecnie pusty placeholder) oraz Twój unikalny adres URL wklejony w polu url node'a HTTP Request (pobierz go z webhook.site — jest sesyjny, zmienia się przy każdej wizycie). Otwórz panel czatu tego workflow i zadaj dowolne pytanie, np. \"jakie są najlepsze LLM-y w 2026 roku\", żeby przetestować cały przepływ i zobaczyć request na stronie webhook.site.",
+        "height": 276,
+        "width": 1128,
+        "color": 4
+      },
+      "id": "f0857c2d-c95a-42db-a6ab-5bfe765c51f4",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        416
+      ]
+    }
+  ],
+  "connections": {
+    "Wiadomość na czacie": {
+      "main": [
+        [
+          {
+            "node": "Generator zapytania wyszukiwania",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generator zapytania wyszukiwania": {
+      "main": [
+        [
+          {
+            "node": "Fire Crawl — wyszukiwanie w sieci",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generator zapytania wyszukiwania",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generator zapytania wyszukiwania",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fire Crawl — wyszukiwanie w sieci": {
+      "main": [
+        [
+          {
+            "node": "Przygotuj odpowiedź czatu",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wyślij wynik na webhook.site (HTTP Request)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "6f108d45-bd63-459a-87e2-c2347c8416a9",
+  "activeVersionId": null,
+  "versionCounter": 16,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-05T06:49:08.460Z",
+      "createdAt": "2026-09-05T06:49:08.460Z",
+      "role": "workflow:owner",
+      "workflowId": "ZyIXTQB3n9AAKEVM",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

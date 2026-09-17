@@ -1,0 +1,225 @@
+{
+  "updatedAt": "2026-09-01T13:23:01.993Z",
+  "createdAt": "2026-09-01T10:42:06.627Z",
+  "id": "KCP66DxEa5L6hrGr",
+  "name": "011 — Asystent push w czacie (Pushover + Date & Time, OpenRouter)",
+  "description": "Agent AI w czacie z dwoma narzędziami: wysyłka powiadomień push przez Pushover (treść wybiera model) i odczyt bieżącej daty. Odtworzone z kursu (integracja Pushover, dzień 4 tygodnia 1).",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "2345d15d-6c1e-497d-880f-7e51ac880a5f",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "4b806e28-bcb7-4454-9c99-64ffd4d7ddf3",
+      "notes": "To węzeł startowy (trigger) całego workflow — nasłuchuje na wiadomości wysyłane w panelu czatu n8n. Każda wiadomość użytkownika uruchamia nowe wykonanie i trafia do AI Agent jako dane wejściowe (chatInput) wraz z identyfikatorem sesji. To właśnie tutaj wpisujesz polecenia typu \"wyślij mi powiadomienie push z dzisiejszą datą\", które dalej uruchamiają narzędzia Pushover i Date & Time. Bez tego węzła nie ma jak przekazać polecenia do agenta w tym workflow."
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Odpowiadaj z przymrużeniem oka i sarkastycznym humorem — nie unikaj ironii i złośliwych uwag, nawet kosztem uprzejmości. Mimo sarkazmu zawsze realnie wykonuj zadanie i korzystaj z dostępnych narzędzi — złośliwość to przyprawa, nie wymówka od roboty. Nie przepraszaj za ton, nie tłumacz się z żartów i nie łagodź ich na koniec. Na pytania oczywiste możesz z przekąsem to skomentować, ale i tak podaj poprawną odpowiedź."
+        }
+      },
+      "id": "c6041e16-af13-4466-a1f1-998dd83f4f43",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        352,
+        112
+      ],
+      "notes": "Główny węzeł decyzyjny workflow — analizuje polecenie użytkownika i sam wybiera, czy i które z dwóch podpiętych narzędzi wywołać: \"Pobierz aktualną datę\" albo \"Wyślij powiadomienie push (Pushover)\". Korzysta z modelu OpenRouter (gpt-oss-120b) do rozumowania oraz Simple Memory do pamiętania kontekstu rozmowy w danej sesji czatu. Typowy scenariusz w tym workflow: użytkownik prosi o powiadomienie z aktualną datą, więc agent najpierw wywołuje narzędzie daty, a dopiero potem wysyła jej wynik jako treść push notification. Sam komponuje treść wiadomości push na podstawie kontekstu rozmowy, bo pole message w narzędziu Pushover jest ustawione na $fromAI."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "cf5acbde-42e7-48ee-a63f-25468f6f0a55",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        224,
+        336
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Dostawca modelu językowego dla AI Agent, podłączony przez OpenRouter z ustawionym konkretnym modelem openai/gpt-oss-120b — darmowym modelem w warstwie darmowej OpenRoutera, więc ten workflow nic nie kosztuje w warstwie LLM. Węzeł nie działa samodzielnie, tylko dostarcza agentowi zdolność rozumowania i decydowania o wywołaniu narzędzi, połączony przez port ai_languageModel, a nie główny przepływ danych. Ten sam model jest już sprawdzony w innym workflow tej instancji (009 — Asystent portfela inwestycyjnego), więc wybór jest świadomy, nie przypadkowy."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('message', 'Treść powiadomienia push do wysłania na telefon') }}",
+        "additionalFields": {}
+      },
+      "id": "6213606b-42d0-44b0-b6cc-91f34abaa02e",
+      "name": "Wyślij powiadomienie push (Pushover)",
+      "type": "n8n-nodes-base.pushoverTool",
+      "typeVersion": 1,
+      "position": [
+        480,
+        336
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Narzędzie AI Agenta wysyłające powiadomienie push na telefon przez API Pushover — wymaga skonfigurowanego credentiala (App Token) oraz pola userKey (User Key z konta Pushover), które wpisujesz ręcznie, bo to Twoja osobista wartość, nie coś, co model powinien zgadywać. Treść wiadomości (message) jest ustawiona przez $fromAI, więc to agent sam decyduje, co faktycznie wyśle — zgodnie z poleceniem użytkownika, a nie sztywnym, zakodowanym tekstem. Agent wywołuje ten węzeł tylko wtedy, gdy uzna, że użytkownik faktycznie prosi o powiadomienie push, np. po pobraniu daty z drugiego narzędzia."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "7d49700f-80e1-4c4f-a846-df5cc93ccf48",
+      "name": "Pobierz aktualną datę",
+      "type": "n8n-nodes-base.dateTimeTool",
+      "typeVersion": 2,
+      "position": [
+        608,
+        336
+      ],
+      "notes": "Proste narzędzie Date & Time w trybie getCurrentDate — zwraca agentowi bieżącą datę i godzinę bez żadnej dodatkowej konfiguracji czy credentiali. W tym workflow służy jako źródło danych do treści powiadomienia push: agent najpierw pyta to narzędzie o datę, a potem przekazuje wynik do narzędzia Pushover jako treść wiadomości. To najprostsze z dwóch narzędzi w tym workflow, dobry punkt startowy do zrozumienia mechaniki narzędzi w AI Agent."
+    },
+    {
+      "parameters": {
+        "content": "## 011 — Asystent push w czacie (Pushover)\n\nAgent AI w oknie czatu n8n, który potrafi wysłać powiadomienie push na telefon przez Pushover i sprawdzić bieżącą datę. Napisz w czacie coś w stylu \"wyślij mi powiadomienie push z dzisiejszą datą\" — agent sam pobierze datę i wyśle ją jako push. Zanim to zadziała, potrzebny jest skonfigurowany credential Pushover API (App Token) oraz wpisany User Key w węźle \"Wyślij powiadomienie push\", a na telefonie zainstalowana i zalogowana aplikacja Pushover. Model językowy to darmowy openai/gpt-oss-120b przez OpenRouter, więc testowanie nic nie kosztuje.",
+        "height": 228,
+        "width": 840
+      },
+      "id": "d60241e8-5c01-4c71-a1bd-1cb719d17752",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        560
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        368,
+        320
+      ],
+      "id": "505508b1-db8d-4c55-ab6a-611b4e1a4c99",
+      "name": "Simple Memory"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyślij powiadomienie push (Pushover)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz aktualną datę": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c01d3dd8-d3fd-4f47-ad40-e278db4eddf6",
+  "activeVersionId": null,
+  "versionCounter": 11,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-01T10:42:06.629Z",
+      "createdAt": "2026-09-01T10:42:06.629Z",
+      "role": "workflow:owner",
+      "workflowId": "KCP66DxEa5L6hrGr",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

@@ -1,0 +1,388 @@
+{
+  "updatedAt": "2026-09-07T07:04:39.239Z",
+  "createdAt": "2026-09-06T15:23:16.032Z",
+  "id": "dEI9W4Vtk94wp7Xi",
+  "name": "028 — Subagent rejestracji transakcji (Webhook, AI Agent, Pipedrive Tool, Structured Output, Pushover)",
+  "description": "Webhook (POST, odpowiedź natychmiastowa) → AI Agent (OpenRouter) sprawdza w Pipedrive, czy dana osoba istnieje, zwraca structured output → IF → tworzy transakcję (deal) w Pipedrive i wysyła Pushover. Wywoływany jako narzędzie record_deal_tool przez agenta",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rejestracja-transakcji",
+        "options": {}
+      },
+      "id": "c183b354-3c1a-4f02-b817-e924307ba9f2",
+      "name": "Webhook rejestracji transakcji",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -32
+      ],
+      "webhookId": "e8f65a04-e316-4c33-a51e-dcd58f6a1ef1",
+      "notes": "Węzeł startowy tego workflow — nasłuchuje na publicznym adresie webhooka i uruchamia cały proces, gdy przyjdzie żądanie POST z imieniem i nazwiskiem osoby. W przeciwieństwie do subagentów wywoływanych przez inny workflow (Execute Workflow Trigger) ten jest wołany z zewnątrz — docelowo przez agenta głosowego ElevenLabs jako narzędzie record_deal_tool.\n\n- httpMethod: POST — żądanie musi przyjść jako POST z ciałem JSON; GET wymagałby przekazania danych przez parametry URL, mniej wygodne dla narzędzia wołanego przez agenta AI.\n- path: rejestracja-transakcji — segment ścieżki w publicznym adresie webhooka (widoczny w Production URL); zmiana tej wartości zmieniłaby adres, pod którym trzeba by przekonfigurować narzędzie w ElevenLabs.\n- authentication: none — endpoint przyjmuje żądania bez uwierzytelnienia; headerAuth dodałby wymóg tajnego nagłówka, sensowny gdyby adres webhooka mógł wpaść w niepowołane ręce (analogicznie do serwera MCP poszukiwania leadów, workflow 024).\n- responseMode: onReceived — odpowiada natychmiast, nie czekając na wynik dalszego przetwarzania (agent, Pipedrive, Pushover działają w tle); responseNode (użyty w workflow 029) czekałby na węzeł Respond to Webhook i zwrócił faktyczny wynik — tu nie jest to potrzebne, bo wołający nie musi znać wyniku rejestracji transakcji od razu."
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.name }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Otrzymujesz imie i nazwisko potencjalnego klienta. Uzyj swojego narzedzia, zeby sprawdzic, czy ta osoba juz istnieje w bazie danych Pipedrive. Jesli istnieje wiecej niz jedno dopasowanie, wybierz jedno i zwroc jego dane. Zwroc ustrukturyzowany wynik: found (czy znaleziono osobe), id (identyfikator znalezionej osoby w Pipedrive), company (nazwa jej firmy) oraz name (jej pelne imie i nazwisko). Jesli nie znajdziesz dopasowania, ustaw found na false i zostaw pozostale pola puste - nie wymyslaj danych."
+        }
+      },
+      "id": "748b1e39-2e40-46eb-8134-79fb4bafe6df",
+      "name": "Silnik rejestracji transakcji",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        -32
+      ],
+      "notes": "AI Agent, który na podstawie imienia i nazwiska z żądania webhooka sprawdza w Pipedrive, czy taka osoba już istnieje, i zwraca jej dane w ustrukturyzowanej formie do dalszego przetwarzania przez węzeł IF.\n\n- promptType: define — prompt pochodzi wprost z wyrażenia w polu text, a nie z domyślnego auto (który czytałby chatInput z Chat Triggera); wymagane, bo trigger to Webhook, nie czat.\n- text: ={{ $json.body.name }} — wstawia jako prompt imię i nazwisko przekazane w ciele żądania POST; stały tekst uniemożliwiłby obsługę różnych osób przy każdym wywołaniu.\n- options.systemMessage — instruuje agenta, żeby przy wielu dopasowaniach wybrał jedno i nigdy nie wymyślał danych, gdy nie znajdzie dopasowania; bez tego zastrzeżenia model mógłby „dociągnąć” fikcyjne dane osoby, żeby wypełnić wymagany schemat.\n- hasOutputParser: true wraz z podłączonym Structured Output Parser — wymusza zwrócenie stałego kształtu JSON (found/id/company/name) zamiast dowolnego tekstu, dzięki czemu węzeł IF może niezawodnie sprawdzić pole found."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "78b37ea1-18b3-4701-a28b-c4a4fa053c84",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        232,
+        200
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik rejestracji transakcji — interpretuje imię i nazwisko, decyduje kiedy wywołać narzędzie Pipedrive i wypełnia pola wymuszone przez Structured Output Parser.\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy); płatny model, np. openai/gpt-5.2 sugerowany w materiale źródłowym, wymagałby płatnego konta OpenRouter i nie zadziała tutaj.\n- credentials.openRouterApi: podłączony credential OpenRouter account — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter."
+    },
+    {
+      "parameters": {
+        "resource": "person",
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {}
+      },
+      "id": "ead449bf-5037-460b-ab29-224c2564d8e5",
+      "name": "Pipedrive - Pobierz wszystkie osoby",
+      "type": "n8n-nodes-base.pipedriveTool",
+      "typeVersion": 2,
+      "position": [
+        360,
+        200
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      },
+      "notes": "Jedyne narzędzie (subnode ai_tool) podłączone do agenta — pobiera z Pipedrive wszystkie zapisane osoby, wśród których agent szuka dopasowania do otrzymanego imienia i nazwiska.\n\n- resource/operation: person/getAll — pobiera listę rekordów osób z CRM; zmiana resource na organization pobrałaby zamiast tego listę firm.\n- authentication: apiToken — uwierzytelnienie stałym kluczem API konta Pipedrive, spójne z resztą integracji Pipedrive w tej instancji.\n- returnAll: true — pobiera komplet rekordów bez limitu; ustawienie false i limit np. na 50 ograniczyłoby przeszukiwaną pulę osób, co przy dużej bazie kontaktów zmniejszyłoby zużycie kontekstu modelu kosztem ryzyka pominięcia nowszych/starszych rekordów.\n- credentials.pipedriveApi: podłączony credential Pipedrive account — bez niego wywołanie zwróci błąd autoryzacji."
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \"found\": true, \"id\": 123, \"company\": \"Acme Sp. z o.o.\", \"name\": \"Jan Kowalski\" }"
+      },
+      "id": "53ca8df6-4baf-4922-be23-0479ccf26d1e",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        488,
+        200
+      ],
+      "notes": "Subnode outputParser wymuszający na agencie zwrócenie JSON-a zgodnego z zadanym schematem zamiast dowolnego tekstu.\n\n- jsonSchemaExample: przykładowy JSON z polami found (czy znaleziono osobę), id, company, name — na jego podstawie n8n generuje wymuszany schemat wyjścia; usunięcie pola company z przykładu usunęłoby je też z wymuszanego schematu, a węzeł Utworz transakcje straciłby dostęp do tej wartości (obecnie i tak nieużywanej w tym workflow, ale dostępnej na przyszłość)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.found }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": true,
+              "id": "e0a6f364-86bd-4984-b8e3-f24bec91cd28"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f85f1db1-8db9-4b53-a96b-45a920037940",
+      "name": "Sprawdz czy znaleziono osobe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        688,
+        -32
+      ],
+      "notes": "Rozdziela dalszy przebieg workflow na dwie gałęzie w zależności od tego, czy agent znalazł pasującą osobę w Pipedrive.\n\n- conditions: jeden warunek typu boolean na polu {{ $json.output.found }} z operacją true — sprawdza wartość logiczną wprost, a nie tekstowe porównanie do słowa \"true\" (ten drugi sposób błędnie zwraca fałsz dla prawdziwej wartości logicznej true, bo porównuje różne typy); to rozróżnienie było źródłem błędu, który trzeba było poprawiać w analogicznym węźle w workflow 027.\n- combinator: and — nieistotne przy jednym warunku, ale wymagane strukturalnie; or dałoby ten sam efekt tutaj, znaczenie miałoby dopiero przy więcej niż jednym warunku."
+    },
+    {
+      "parameters": {
+        "title": "={{ $json.output.name }} - transakcja",
+        "associateWith": "person",
+        "person_id": "={{ Number($json.output.id) }}",
+        "additionalFields": {}
+      },
+      "id": "4b553516-0a9d-4a3d-aafa-7ae00f29045d",
+      "name": "Utworz transakcje",
+      "type": "n8n-nodes-base.pipedrive",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -128
+      ],
+      "credentials": {
+        "pipedriveApi": {
+          "id": "3mYI0bBWWSBPxHRu",
+          "name": "Pipedrive account"
+        }
+      },
+      "notes": "Uruchamiany tylko na gałęzi \"prawda\" węzła IF — tworzy w Pipedrive rekord transakcji (deal) powiązanej ze znalezioną osobą, reprezentujący fakt, że klient jest zainteresowany demo.\n\n- resource/operation: deal/create — tworzy nowy rekord transakcji w potoku sprzedażowym; zmiana operation na update pozwoliłaby zamiast tego edytować istniejącą transakcję.\n- title: ={{ $json.output.name }} - transakcja — tytuł złożony z imienia i nazwiska osoby zwróconego przez agenta; inny wzorzec, np. z datą, ułatwiłby odróżnianie wielu transakcji tej samej osoby w czasie.\n- associateWith: person — określa, że transakcja wiąże się przez person_id, a nie przez organizację; wartość organization przełączyłaby wymagane pole na org_id.\n- person_id: ={{ Number($json.output.id) }} — identyfikator osoby zwrócony przez agenta, jawnie rzutowany na liczbę; bez tego rzutowania Pipedrive API czasem zwraca ten identyfikator jako string, co psuje to pole typowane jako number (znany gotcha, patrz workflow 025).\n- credentials.pipedriveApi: podłączony credential Pipedrive account — bez niego wywołanie zwróci błąd autoryzacji."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "=Utworzono transakcje w Pipedrive.",
+        "priority": 0,
+        "additionalFields": {
+          "title": "Account Executive: transakcja utworzona"
+        }
+      },
+      "id": "c5e48103-fd53-47c5-8c89-fac6a19edb15",
+      "name": "Powiadom o utworzeniu transakcji",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        -128
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Wysyła powiadomienie push po pomyślnym utworzeniu transakcji w Pipedrive — jedyny sygnał, że coś się wydarzyło, bo webhook odpowiada wołającemu natychmiast, zanim ten węzeł w ogóle się wykona.\n\n- userKey: identyfikator konta Pushover użytkownika, ten sam co w workflow 011/020 — bez niego powiadomienie trafiłoby donikąd.\n- message: stały tekst \"Utworzono transakcje w Pipedrive.\" — nie zawiera imienia osoby ani szczegółów; wstawienie {{ $json.output.name }} wzbogaciłoby powiadomienie o to, kogo dotyczyła rejestracja.\n- priority: 0 (normalny) — zwykłe powiadomienie bez pomijania trybu cichego telefonu; 1 (wysoki) użyty w gałęzi niepowodzenia niżej, żeby błędy były trudniejsze do przeoczenia.\n- additionalFields.title: \"Account Executive: transakcja utworzona\" — nagłówek powiadomienia widoczny od razu na ekranie blokady, ułatwia odróżnienie źródła bez otwierania treści."
+    },
+    {
+      "parameters": {
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "=Nie znaleziono osoby w Pipedrive - transakcja nie zostala utworzona.",
+        "priority": 1,
+        "additionalFields": {
+          "title": "Account Executive: brak dopasowania"
+        }
+      },
+      "id": "a8065a05-0082-4bf5-b2e6-3738e2bbe49c",
+      "name": "Powiadom o braku dopasowania",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        912,
+        64
+      ],
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      },
+      "notes": "Wysyła powiadomienie push, gdy agent nie znalazł w Pipedrive osoby pasującej do otrzymanego imienia i nazwiska — jedyny ślad tego, że rejestracja transakcji się nie powiodła, skoro webhook już odpowiedział wołającemu wcześniej.\n\n- message: stały tekst informujący o braku dopasowania i braku utworzonej transakcji.\n- priority: 1 (wysoki) — pomija tryb cichy telefonu, bo to sygnał błędu wymagający uwagi, w przeciwieństwie do priority 0 na gałęzi sukcesu.\n- additionalFields.title: \"Account Executive: brak dopasowania\" — pozwala od razu odróżnić ten przypadek od pomyślnej rejestracji w liście powiadomień."
+    },
+    {
+      "parameters": {
+        "content": "## Subagent rejestracji transakcji\n\nWebhook (POST) uruchamia ten workflow, gdy przyjdzie żądanie z imieniem i nazwiskiem potencjalnego klienta zainteresowanego demo — docelowo wywoływany przez agenta głosowego ElevenLabs (Account Executive) jako narzędzie record_deal_tool. AI Agent (OpenRouter) sprawdza w Pipedrive, czy taka osoba już istnieje, zwraca ustrukturyzowany wynik (found/id/company/name), a węzeł IF na tej podstawie albo tworzy transakcję (deal) powiązaną z tą osobą, albo kończy bez akcji. Webhook odpowiada wołającemu natychmiast, nie czekając na wynik — jedynym sygnałem sukcesu lub porażki jest powiadomienie push na obu gałęziach. Żeby przetestować: wyślij POST na Production URL tego webhooka z ciałem {\"name\": \"Imię Nazwisko\"} istniejącej w Pipedrive osoby, a potem sprawdź telefon i zakładkę Deals w Pipedrive. Wymaga podłączonego credentiala Pipedrive API (typ apiToken) — już skonfigurowany jako Pipedrive account.",
+        "height": 300,
+        "width": 900,
+        "color": 4
+      },
+      "id": "7da01a36-ba5d-43b5-a466-68463d0b0898",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**✅ Osoba znaleziona** → tworzy transakcję (deal) w Pipedrive i wysyła push",
+        "height": 80,
+        "width": 280,
+        "color": 4
+      },
+      "id": "63bacd4a-7ed5-4ce0-b409-e5cd5f9fc50e",
+      "name": "Etykieta: sukces",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "**❌ Brak dopasowania** → tylko push, bez transakcji",
+        "height": 80,
+        "width": 280,
+        "color": 4
+      },
+      "id": "04b5756b-97a1-43b9-9a39-63695963b4a0",
+      "name": "Etykieta: brak dopasowania",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        864,
+        32
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook rejestracji transakcji": {
+      "main": [
+        [
+          {
+            "node": "Silnik rejestracji transakcji",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Silnik rejestracji transakcji": {
+      "main": [
+        [
+          {
+            "node": "Sprawdz czy znaleziono osobe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik rejestracji transakcji",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipedrive - Pobierz wszystkie osoby": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik rejestracji transakcji",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Silnik rejestracji transakcji",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdz czy znaleziono osobe": {
+      "main": [
+        [
+          {
+            "node": "Utworz transakcje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Powiadom o braku dopasowania",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Utworz transakcje": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o utworzeniu transakcji",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "a71793a2-9435-4d15-910d-207bf4432215",
+  "activeVersionId": "ddbeaa46-e41f-4e31-9277-ec0b74eb7d38",
+  "versionCounter": 5,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-06T15:23:16.033Z",
+      "createdAt": "2026-09-06T15:23:16.033Z",
+      "role": "workflow:owner",
+      "workflowId": "dEI9W4Vtk94wp7Xi",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

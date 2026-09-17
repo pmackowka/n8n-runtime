@@ -1,0 +1,512 @@
+{
+  "updatedAt": "2026-09-06T15:20:12.992Z",
+  "createdAt": "2026-09-06T13:17:47.320Z",
+  "id": "lQ3E20CmsJzMXnwG",
+  "name": "027 — Menedżer ds. rozwoju biznesu (Google Drive Trigger, Extract from File, AI Agent, Call n8n Workflow Tool)",
+  "description": "Google Drive Trigger (folder ICP File Drop, placeholder) → pobiera i parsuje PDF → AI Agent (OpenRouter) koordynuje 3 subagentów (poszukiwanie, Rev Ops, SDR) jako Call n8n Workflow Tool, żeby wygenerować nowy biznes z profilu idealnego klienta.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "c0f8084c-9283-404e-98ce-f2e6e4bf0b17",
+      "name": "Nowy plik w ICP File Drop",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Węzeł startowy tego workflow — budzi się, gdy w obserwowanym folderze na Dysku Google pojawi się nowy plik (profil idealnego klienta w PDF), i uruchamia cały łańcuch: pobranie pliku, wyciągnięcie tekstu, przekazanie go do agenta menedżera.\n\n- triggerOn: specificFolder — obserwuje jeden konkretny folder zamiast pojedynczego pliku; wartość specificFile pozwoliłaby zamiast tego reagować na zmiany w jednym z góry wskazanym dokumencie, niezależnie od tego, gdzie leży.\n- folderToWatch: puste (placeholder, tryb list) — docelowo ma wskazywać folder ICP File Drop na Dysku Google; dopóki nie jest wybrany żaden realny folder, trigger nie ma czego obserwować.\n- event: fileCreated — reaguje wyłącznie na nowo utworzone pliki; fileUpdated reagowałby też na edycję już istniejących plików w tym folderze, co przy PDF-ach wgrywanych raz nie jest potrzebne.\n- pollTimes: everyMinute — n8n sprawdza zawartość folderu raz na minutę (Google Drive nie ma webhooków dla zwykłych kont, więc trigger musi odpytywać); rzadszy interwał, np. co 15 minut, zmniejszyłby liczbę wywołań API kosztem opóźnienia w wykryciu nowego pliku."
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {
+          "binaryPropertyName": "data"
+        },
+        "resource": "file"
+      },
+      "id": "16deec9f-3f1f-404d-8692-72754d2fbd61",
+      "name": "Pobierz plik ICP",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        240,
+        0
+      ],
+      "notes": "Pobiera z Dysku Google binarną zawartość pliku, którego identyfikator przyszedł z węzła Nowy plik w ICP File Drop — to ten sam plik PDF, który uruchomił workflow, teraz gotowy do dalszego przetwarzania.\n\n- resource/operation: file/download — pobiera zawartość konkretnego pliku; zmiana operation na upload robiłaby coś przeciwnego, czyli wysyłałaby nowy plik na Dysk zamiast go stamtąd ściągać.\n- fileId: ={{ $json.id }} w trybie id — pobiera plik po identyfikatorze zwróconym przez poprzedni węzeł (trigger), zamiast wskazywać plik ręcznie z listy (tryb list); stały, ręcznie wybrany plik uniemożliwiłby dynamiczne przetwarzanie różnych plików wrzucanych do folderu.\n- options.binaryPropertyName: data — nazwa pola binarnego, pod którym trafia pobrana zawartość pliku w wyjściu tego węzła; zmiana na inną nazwę, np. pdfFile, wymagałaby spójnej zmiany tej samej wartości w kolejnym węźle (Wyodrębnij tekst z PDF), bo to on czyta dane spod tej właśnie nazwy."
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {},
+        "binaryPropertyName": "data"
+      },
+      "id": "19c326b0-9df3-4621-8132-66b8671d8799",
+      "name": "Wyodrebnij tekst z PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ],
+      "notes": "Zamienia binarną zawartość pobranego pliku PDF na zwykły tekst, który trafia bezpośrednio jako prompt do agenta menedżera ds. rozwoju biznesu.\n\n- operation: pdf — traktuje plik jako PDF i wyciąga z niego tekst oraz metadane; wybór innej wartości, np. csv albo xlsx, próbowałby parsować plik jako arkusz danych i zawiódłby na pliku PDF.\n- binaryPropertyName: data — czyta zawartość binarną z pola data, czyli dokładnie tej samej nazwy, pod jaką poprzedni węzeł (Pobierz plik ICP) zapisał pobrany plik; niezgodność tych dwóch nazw jest najczęstszą przyczyną błędu „brak danych binarnych” w tego typu łańcuchach.\n- options: puste — domyślnie łączy tekst ze wszystkich stron PDF w jeden ciąg (joinPages) i nie ogranicza liczby stron; ustawienie joinPages na false zwróciłoby zamiast tego osobny tekst dla każdej strony, co przydałoby się przy bardzo długich, wielostronicowych profilach klienta wymagających analizy strona po stronie."
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "3509455c-a0df-4dbc-ab93-1ed3066735fe",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        480,
+        240
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "sYTg61BcVRFqXruq",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "Model językowy podłączony jako subnode do agenta Silnik menedżera ds. rozwoju biznesu — interpretuje opis ICP i decyduje, które z trzech narzędzi wywołać w danym kroku oraz jakie dane im przekazać.\n\n- model: openai/gpt-oss-120b — jedyny model, który realnie działa na koncie OpenRouter w tej instancji (darmowy); płatny model, np. openai/gpt-5.2 sugerowany w materiale źródłowym, wymagałby płatnego konta OpenRouter i nie zadziała tutaj.\n- credentials.openRouterApi: podłączony credential OpenRouter account — bez niego węzeł nie mógłby się uwierzytelnić wobec API OpenRouter; osobny credential miałby sens tylko, gdyby trzeba było rozdzielić limity/billing między różnymi kontami OpenRouter."
+    },
+    {
+      "parameters": {
+        "description": "Uzyj tego narzedzia, zeby wyszukac potencjalnych klientow (leady) w internecie na podstawie profilu idealnego klienta (ICP). Narzedzie przeszukuje siec i przewiduje adresy e-mail, zwracajac informacje o znalezionych potencjalnych klientach (imie, nazwisko, firma, stanowisko, e-mail, uzasadnienie). Wywolaj to narzedzie raz, zeby pobrac wiele leadow sprzedazowych naraz.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "NfHGoXDEvE1F0KrF",
+          "cachedResultName": "023 — Subagent poszukiwania leadow sprzedazowych (Execute Workflow Trigger, AI Agent, MCP Tools)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', 'Zapytanie opisujace szukanych leadow sprzedazowych na podstawie profilu idealnego klienta (ICP) - branza, lokalizacja, wielkosc firmy, stanowisko, liczba wynikow') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "d4732cdd-bc8c-4bda-885e-0b2974d6e690",
+      "name": "Subagent poszukiwania leadow",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        240
+      ],
+      "notes": "Pierwsze z trzech narzędzi (subnode ai_tool) podłączonych do agenta menedżera — opakowuje workflow 023 (Subagent poszukiwania leadów sprzedażowych) jako narzędzie, dające agentowi dostęp do wyszukiwania potencjalnych klientów w internecie na podstawie ICP.\n\n- description — jedyny tekst, na podstawie którego model decyduje, kiedy i jak użyć tego narzędzia (wyszukiwanie leadów pasujących do ICP, wywołanie raz); krótszy, ogólnikowy opis utrudniłby modelowi trafne dopasowanie narzędzia do zadania.\n- source/workflowId: database, tryb id, wskazuje workflow 023 po jego rzeczywistym identyfikatorze — wymaga, żeby workflow 023 był opublikowany, inaczej wywołanie zawiedzie w runtime nawet mimo poprawnego ID; alternatywa parameter pozwoliłaby wkleić kod całego pod-workflow bezpośrednio w ten węzeł zamiast trzymać go jako osobny, wielokrotnego użytku workflow.\n- workflowInputs (mappingMode: defineBelow, pole query): wartość pola query jest definiowana przez model przez $fromAI(...) z opisem podpowiadającym zakres (branża, lokalizacja, wielkość firmy, stanowisko, liczba wyników); stała wartość tekstowa zamiast $fromAI wysyłałaby zawsze to samo, niezmienne zapytanie do subagenta, niezależnie od treści konkretnego ICP."
+    },
+    {
+      "parameters": {
+        "description": "Uzyj tego narzedzia, zeby zapisac pojedynczego potencjalnego klienta (lead) w bazie danych CRM Pipedrive. Wywolaj to narzedzie osobno dla kazdego leada, ktory ma zostac zapisany.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "CxVYswyu7zYtyXNm",
+          "cachedResultName": "025 — Subagent Rev Ops: zapis leada do CRM Pipedrive (Execute Workflow Trigger, AI Agent, Pipedrive Tool)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "leadDescription": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('leadDescription', 'Opis potencjalnego klienta do zapisania w Pipedrive, zawierajacy jego imie i nazwisko, firme, stanowisko oraz adres e-mail') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "leadDescription",
+              "displayName": "leadDescription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "f0f37079-cfe9-4f8c-88cd-35b7cd500f3b",
+      "name": "Subagent Rev Ops",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        240
+      ],
+      "notes": "Drugie z trzech narzędzi (subnode ai_tool) — opakowuje workflow 025 (Subagent Rev Ops) jako narzędzie, dające agentowi możliwość zapisania pojedynczego znalezionego leada w CRM Pipedrive.\n\n- description — jawnie instruuje model, żeby wywoływał to narzędzie osobno dla każdego leada do zapisania, a nie raz dla wszystkich naraz; bez tego zastrzeżenia model mógłby spróbować przekazać listę wszystkich leadów w jednym wywołaniu, czego workflow 025 (przyjmujący jeden opis na wywołanie) by nie obsłużył.\n- source/workflowId: database, tryb id, wskazuje workflow 025 po ID — workflow 025 jest już opublikowany, więc to narzędzie faktycznie zadziała w runtime.\n- workflowInputs (mappingMode: defineBelow, pole leadDescription): wartość definiowana przez model przez $fromAI(...) z opisem wymuszającym imię i nazwisko, firmę, stanowisko oraz e-mail; węższy opis (np. bez wymogu podania stanowiska) dałby modelowi więcej swobody, kosztem mniej kompletnych danych trafiających do Pipedrive."
+    },
+    {
+      "parameters": {
+        "description": "To narzedzie generuje szkice maili sprzedazowych (SDR) do wszystkich potencjalnych klientow, ktorzy zostali zaladowani do CRM Pipedrive. Wywolaj to narzedzie raz, zeby wygenerowac wszystkie wersje robocze e-maili naraz - po tym, jak wszyscy znalezieni leady zostana juz zapisani w Pipedrive.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "n6PnZKFjyvtavCVs",
+          "cachedResultName": "026 — Subagent SDR: outreach do leadow z Pipedrive (Execute Workflow Trigger, AI Agent, Pipedrive Tool, Gmail Tool)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "offerBrief": "Nadawca: Donna, CTO firmy AI Accounting. Produkt: innowacyjne oprogramowanie ksiegowe AI, ktore usprawnia koszty i zwieksza wydajnosc. CTA: zadzwon pod numer +1 555-0100, zeby porozmawiac z naszym agentem AI i umowic sie na demo."
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "offerBrief",
+              "displayName": "offerBrief",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "3472b1ed-314d-4050-a3cb-f04cce8378bd",
+      "name": "Subagent SDR",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        240
+      ],
+      "notes": "Trzecie z trzech narzędzi (subnode ai_tool) — opakowuje workflow 026 (Subagent SDR) jako narzędzie, dające agentowi możliwość wygenerowania szkiców maili outreach dla wszystkich leadów już zapisanych w Pipedrive.\n\n- description — jawnie instruuje model, żeby wywołał to narzędzie dokładnie raz i dopiero po zapisaniu wszystkich leadów, bo samo narzędzie (workflow 026) przy każdym wywołaniu pobiera WSZYSTKIE osoby z Pipedrive naraz — wywołanie go wcześniej lub wielokrotnie wygenerowałoby duplikaty albo pominęło jeszcze niezapisane leady.\n- source/workflowId: database, tryb id, wskazuje workflow 026 po ID — workflow 026 NIE jest jeszcze opublikowany (brak podłączonego credentiala Gmail OAuth2), więc to narzędzie na razie zawiedzie w runtime mimo poprawnej konfiguracji tego węzła.\n- workflowInputs (mappingMode: defineBelow, pole offerBrief): wartość jest STAŁYM tekstem opisującym konkretną ofertę (nadawca, produkt, wezwanie do działania), a nie $fromAI — celowo, żeby model menedżera nie wymyślał treści oferty; zamiana na $fromAI dałaby modelowi możliwość dynamicznego dobierania oferty do każdego ICP, kosztem ryzyka, że zacznie zmyślać szczegóły produktu, których nikt mu nie podał."
+    },
+    {
+      "parameters": {
+        "content": "## Menedzer ds. rozwoju biznesu\n\nGoogle Drive Trigger budzi sie, gdy w folderze ICP File Drop pojawi sie nowy plik PDF z opisem profilu idealnego klienta (ICP); workflow pobiera go i wyciaga z niego tekst. AI Agent (OpenRouter, openai/gpt-oss-120b) koordynuje trzech subagentow jako narzedzia: najpierw wyszukuje leady pasujace do ICP (workflow 023), potem zapisuje kazdego z nich osobno w Pipedrive (workflow 025), a na koncu generuje wszystkim razem szkice maili outreach (workflow 026). Zeby to zadzialalo end-to-end, potrzebne sa: realny credential Google Drive OAuth2 i wskazanie folderu ICP File Drop na triggerze i wezle pobierania pliku, oraz opublikowany workflow 026 (obecnie zablokowany brakiem credentiala Gmail OAuth2) - workflow 023 i 025 sa juz opublikowane. Zeby przetestowac pojedynczy przebieg bez czekania na trigger: uruchom ten workflow recznie z przypietymi danymi wejsciowymi symulujacymi wyciagniety tekst PDF. Oferta przekazywana do SDR-a (offerBrief) jest na razie zaszytym na stale tekstem, nie generowanym przez model.",
+        "height": 228,
+        "width": 1224,
+        "color": 4
+      },
+      "id": "1834b070-6d36-4687-acb1-8a9408d80248",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        400
+      ]
+    },
+    {
+      "id": "57331a7b-1d97-4e93-becc-038f538c4653",
+      "name": "Silnik menedzera ds. rozwoju biznesu",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Jestes menedzerem ds. rozwoju biznesu koordynujacym trzech subagentow, zeby wygenerowac nowy biznes na podstawie podanego profilu idealnego klienta (ICP).\n\nPostepuj w tej kolejnosci:\n1. Wywolaj narzedzie Subagent poszukiwania leadow DOKLADNIE RAZ, zeby znalezc potencjalnych klientow pasujacych do ICP.\n2. Dla KAZDEGO znalezionego potencjalnego klienta wywolaj narzedzie Subagent Rev Ops OSOBNO (wielokrotnie, raz na kazdego), podajac jego imie i nazwisko, firme, stanowisko i adres e-mail, zeby zapisac go w Pipedrive.\n3. Dopiero PO zapisaniu wszystkich znalezionych klientow w Pipedrive, wywolaj narzedzie Subagent SDR DOKLADNIE RAZ, zeby wygenerowac wersje robocze maili outreach dla wszystkich zapisanych osob.\n\nNie pomijaj zadnego znalezionego leada i nie wywoluj Subagenta SDR przed zakonczeniem zapisywania wszystkich leadow w Pipedrive.\n\nNa koniec zwroc ustrukturyzowane podsumowanie: success (true, jesli caly proces zakonczyl sie powodzeniem - leady znalezione, zapisane w Pipedrive i wygenerowano maile; false w przeciwnym razie) oraz summary (zwiezly opis tego, co sie wydarzylo).",
+          "maxIterations": 40
+        }
+      },
+      "notes": "AI Agent pełniący rolę menedżera ds. rozwoju biznesu — na podstawie wyciągniętego z PDF opisu profilu idealnego klienta (ICP) samodzielnie koordynuje trzech podrzędnych subagentów (poszukiwanie leadów, zapis do Pipedrive, generowanie outreachu SDR), wywołując ich we wskazanej w prompcie kolejności, a na końcu zwraca ustrukturyzowany wynik zużywany przez węzeł IF.\n\n- promptType: define — pobiera prompt wprost z wyrażenia w polu text, zamiast domyślnego auto (które czytałoby chatInput z Chat Triggera); wymagane, bo ten workflow startuje z Google Drive Triggera, nie z czatu.\n- text: ={{ $json.text }} — wstawia jako prompt tekst wyciągnięty z PDF przez poprzedni węzeł; stały tekst dałby agentowi zawsze ten sam, niezmienny profil klienta, niezależnie od tego, jaki plik faktycznie wpadnie do folderu.\n- options.systemMessage — wymusza sztywną kolejność trzech wywołań narzędzi (poszukiwanie raz → zapis osobno dla każdego leada → SDR raz na końcu) i każe zwrócić ustrukturyzowane podsumowanie na koniec; bez tej kolejności agent mógłby np. wywołać SDR-a zanim jakikolwiek lead trafiłby do Pipedrive.\n- options.maxIterations: 40 — limit kroków podniesiony wysoko, bo liczba wywołań rośnie z liczbą znalezionych leadów (jedno poszukiwanie + jeden zapis na leada, maks. 20 leadów + jedno wywołanie SDR); niższy limit przerwałby proces w połowie zapisywania leadów przy większej ich liczbie.\n- hasOutputParser: true wraz z podłączonym Structured Output Parser (schema success/summary) — wymusza na agencie zwrócenie ustrukturyzowanego wyniku zamiast dowolnego tekstu, żeby kolejny węzeł (IF) mógł niezawodnie sprawdzić, czy cały proces się powiódł; bez tego IF musiałby parsować wolny tekst szukając słów kluczowych, co jest znacznie mniej niezawodne."
+    },
+    {
+      "id": "205ea496-46e4-4b64-af6c-0a5c0ad8dd13",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        960,
+        240
+      ],
+      "parameters": {
+        "jsonSchemaExample": "{ \"success\": true, \"summary\": \"Znaleziono 5 leadow, zapisano wszystkie w Pipedrive i wygenerowano 5 wersji roboczych maili SDR.\" }"
+      }
+    },
+    {
+      "id": "f6cdd53f-6279-42c6-b592-5b28764f2efc",
+      "name": "Sprawdz sukces",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.output.success }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fff39485-5301-4941-b3a8-4276d02e1658",
+      "name": "Powiadom o sukcesie",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        -120
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $json.output.summary }}",
+        "priority": 0,
+        "additionalFields": {
+          "title": "Menedzer rozwoju biznesu: sukces"
+        }
+      },
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      }
+    },
+    {
+      "id": "9f580f7c-d44d-4cc3-818b-a9867b18b91d",
+      "name": "Powiadom o niepowodzeniu",
+      "type": "n8n-nodes-base.pushover",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        120
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "push",
+        "userKey": "utdcqzjjzi12htk5xcy5x78jjp7y3u",
+        "message": "={{ $json.output.summary }}",
+        "priority": 1,
+        "additionalFields": {
+          "title": "Menedzer rozwoju biznesu: niepowodzenie"
+        }
+      },
+      "credentials": {
+        "pushoverApi": {
+          "id": "uxmpekfWXSAMSFTs",
+          "name": "Pushover account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Nowy plik w ICP File Drop": {
+      "main": [
+        [
+          {
+            "node": "Pobierz plik ICP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pobierz plik ICP": {
+      "main": [
+        [
+          {
+            "node": "Wyodrebnij tekst z PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wyodrebnij tekst z PDF": {
+      "main": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subagent poszukiwania leadow": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subagent Rev Ops": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subagent SDR": {
+      "ai_tool": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Silnik menedzera ds. rozwoju biznesu",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Silnik menedzera ds. rozwoju biznesu": {
+      "main": [
+        [
+          {
+            "node": "Sprawdz sukces",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sprawdz sukces": {
+      "main": [
+        [
+          {
+            "node": "Powiadom o sukcesie",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Powiadom o niepowodzeniu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "6d090129-91f1-4c85-b9e4-c1830cc3d988",
+  "activeVersionId": null,
+  "versionCounter": 8,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-06T13:17:47.321Z",
+      "createdAt": "2026-09-06T13:17:47.321Z",
+      "role": "workflow:owner",
+      "workflowId": "lQ3E20CmsJzMXnwG",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Fix: przywrocenie znormalizowanych parametrow resource/binaryPropertyName",
+    "description": "Edycja agenta (dodanie structured output) po cichu wyzerowala resource na Pobierz plik ICP i binaryPropertyName na Wyodrebnij tekst z PDF - znany gotcha normalizacji n8n. Ustawione ponownie jawnie."
+  }
+}

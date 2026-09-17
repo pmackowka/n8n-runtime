@@ -1,0 +1,408 @@
+{
+  "updatedAt": "2026-09-01T13:24:08.712Z",
+  "createdAt": "2026-07-07T08:02:23.373Z",
+  "id": "cDXyjZdxbAwzNG0n",
+  "name": "007 — Dzienny raport zadań z ClickUp (OpenRouter o3-mini)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "c137a65c-ec04-4dc3-b4e4-02d194bb8686",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -608,
+        -240
+      ],
+      "parameters": {
+        "width": 480,
+        "height": 896,
+        "content": "## Dzienne raporty z list w ClickUp\n\n### Jak to działa\n\nTen workflow uruchamia się codziennie rano według harmonogramu, zbiera zadania z folderu lub listy w ClickUp i przygotowuje je do raportu. Scala pobrane zadania, sprawdza, czy dane są obecne, a następnie albo generuje raport napisany przez AI w ClickUp, albo odnotowuje błąd i zatrzymuje pracę. Ścieżka sukcesu i ścieżka błędu są rozdzielone na osobne gałęzie po kroku walidacji danych.\n\n### Kroki konfiguracji\n\n- Ustaw Schedule Trigger na żądaną porę i strefę czasową dziennego raportu.\n- Dodaj credentiale ClickUp i wskaż właściwy workspace, folder, listę i lokalizacje docelowe w węzłach ClickUp.\n- Skonfiguruj credentiale modelu AI Agenta, w tym klucz OpenRouter/API i preferowany model.\n- Sprawdź węzły ClickUp tworzące raport i oznaczające błędy, żeby zapisywały się do właściwej listy, zadania lub pól statusu.\n\n### Dostosowanie\n\nDostosuj harmonogram, źródłowy folder/listę ClickUp, model AI oraz prompt lub formatowanie raportu do potrzeb dziennego raportowania zespołu."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "db3efc6b-8382-4442-a0af-4102e2875673",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -48,
+        -32
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 864,
+        "height": 304,
+        "content": "## Harmonogram i zebranie zadań\n\nUruchamia dzienny poranny przebieg, pobiera zadania ze skonfigurowanego folderu lub listy ClickUp, scala dane zadań i sprawdza, czy pobrano użyteczne dane, zanim przejdzie dalej."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "b7d353a4-4e84-4a48-a2e3-e824bbca049e",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        -240
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 768,
+        "height": 544,
+        "content": "## Generowanie podsumowania raportu\n\nObsługuje ścieżkę sukcesu: tworzy listę/element raportu w ClickUp, przekazuje zebrane dane zadań przez AI Agenta z jego modelem czatu i zapisuje wygenerowany raport z powrotem do ClickUp."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "714072d3-0786-457b-b93e-e0d4282afa8e",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        848,
+        336
+      ],
+      "parameters": {
+        "color": 7,
+        "width": 368,
+        "height": 336,
+        "content": "## Oznaczenie niepowodzenia pobierania\n\nObsługuje gałąź błędu, gdy nie pobrano żadnych danych — oznacza błąd w ClickUp, a następnie zatrzymuje workflow z jawnym błędem."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "c4aa6607-8fd8-4d8e-b11c-a9f27a6ae133",
+      "name": "Verify Data Retrieval",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "daf4a81d-8be5-466b-ab09-14b2c3871a46",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.tasksOutput }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3,
+      "notes": "ROLA: Bramka walidacji — sprawdza, czy w ogóle pobrano jakieś zadania, zanim workflow zacznie generować raport. Rozdziela przepływ na ścieżkę sukcesu i ścieżkę błędu.\n\nMECHANIZM: węzeł If z jednym warunkiem — pole tasksOutput musi istnieć (operator „exists\", ścisła walidacja typów). Sprawdzane wyrażenie: {{ $json.tasksOutput }}. Jeśli Compile Task Data zbudował niepusty tekst zadań, warunek jest spełniony.\n\nWEJŚCIE: obiekt z Compile Task Data.\nWYJŚCIE:\n- gałąź TRUE (wyjście 0, są dane) → Build Report List (start generowania raportu),\n- gałąź FALSE (wyjście 1, brak danych) → Log Error Status (ścieżka błędu).\n\nPO CO: zabezpiecza przed generowaniem pustego raportu i marnowaniem wywołania AI, gdy lista ClickUp była pusta albo pobranie zawiodło. Klasyczny wzorzec: waliduj dane, zanim ruszysz kosztowną operację.",
+      "notesInFlow": false
+    },
+    {
+      "id": "6e598704-71c2-4fef-bcc7-f2525467a512",
+      "name": "Compile Task Data",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "jsCode": "// Wejście: tablica zadań z ClickUp\nconst inputItems = items.map(item => item.json);\n\n// Zbuduj JEDEN obiekt ze wszystkimi zadaniami scalonymi razem\nconst aggregatedData = {};\nlet tasksOutput = \"\";\n\ninputItems.forEach((task, index) => {\n  const num = index + 1; // numeracja od 1\n\n  // Dodaj każde pole z numerowanym sufiksem\n  aggregatedData[`taskId_${num}`] = task.taskId || \"\";\n  aggregatedData[`name_${num}`] = task.name || \"\";\n  aggregatedData[`description_${num}`] = task.description || \"\";\n\n  aggregatedData[`createdDate_${num}`] = task.createdDate || \"\";\n  aggregatedData[`dueDate_${num}`] = task.dueDate || \"\";\n  aggregatedData[`updatedDate_${num}`] = task.updatedDate || \"\";\n\n  aggregatedData[`status_${num}`] = task.status || \"\";\n  aggregatedData[`priority_${num}`] = task.priority || \"\";\n\n  aggregatedData[`customFields_${num}`] = task.customFields ? JSON.stringify(task.customFields) : \"\";\n  aggregatedData[`tags_${num}`] = task.tags || \"\";\n\n  aggregatedData[`listId_${num}`] = task.listId || \"\";\n  aggregatedData[`folderId_${num}`] = task.folderId || \"\";\n  aggregatedData[`spaceId_${num}`] = task.spaceId || \"\";\n  aggregatedData[`taskUrl_${num}`] = task.taskUrl || \"\";\n\n  // Zbuduj scalony tasksOutput dla tej iteracji\n  const separator = index < inputItems.length - 1 ? \"\\n---\\n\" : \"\";\n  tasksOutput += `[Zadanie ${num}] ${task.name || \"(brak nazwy)\"}\\n${task.description || \"(brak opisu)\"}${separator}`;\n});\n\n// Dodaj metadane o łącznej liczbie zadań\naggregatedData._totalTasks = inputItems.length;\n\n// Dodaj scalony tasksOutput\naggregatedData.tasksOutput = tasksOutput.trim();\n\n// Zwróć jako POJEDYNCZY element n8n\nreturn [{ json: aggregatedData }];"
+      },
+      "typeVersion": 2,
+      "notes": "ROLA: Węzeł Code (JavaScript) scalający wiele zadań z ClickUp w jeden element z gotowym tekstem do podsumowania przez AI.\n\nMECHANIZM: bierze tablicę zadań z poprzedniego węzła i buduje jeden obiekt zbiorczy. Robi dwie rzeczy równolegle:\n1. Dla każdego zadania dokłada pola z numerowanym sufiksem (taskId_1, name_1, description_1, status_1, ...) — pełny, ustrukturyzowany zrzut wszystkich danych.\n2. Buduje pole tasksOutput — czytelny blok tekstu w formacie „[Zadanie N] nazwa / opis\", rozdzielony separatorami. To ten tekst trafia do promptu AI (a nie surowy JSON).\n\nDodaje też _totalTasks (liczba zadań). Zwraca WSZYSTKO jako jeden element n8n (nie strumień) — bo dalszy prompt AI potrzebuje całości naraz.\n\nWEJŚCIE: strumień zadań z Retrieve ClickUp Task List.\nWYJŚCIE: pojedynczy obiekt { taskId_1, ..., tasksOutput, _totalTasks } → do Verify Data Retrieval.\n\nUWAGA: klucze pól (taskId_, name_...) zostają po angielsku — to wewnętrzne identyfikatory. Przetłumaczone są tylko teksty widoczne w raporcie ([Zadanie N], „(brak nazwy)\", „(brak opisu)\") oraz komentarze. Kluczowe pole dla dalszego przepływu to tasksOutput.",
+      "notesInFlow": false
+    },
+    {
+      "id": "f4e42b70-e838-4c69-a619-2c5e496cca1d",
+      "name": "Retrieve ClickUp Task List",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "list": "901524181718",
+        "space": "90154501378",
+        "filters": {},
+        "operation": "getAll",
+        "authentication": "oAuth2"
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Pobiera z ClickUp wszystkie zadania ze wskazanej listy — to źródło danych do raportu.\n\nMECHANIZM: operacja getAll na zasobie zadań. Wskazana lista (list 901524181718) w przestrzeni (space 90154501378) — to identyfikatory z konta autora szablonu, DO PODMIANY na własne. Uwierzytelnia się przez ClickUp OAuth2. Brak filtrów = pobiera wszystkie zadania z listy.\n\nWEJŚCIE: sygnał z triggera.\nWYJŚCIE: lista zadań (każde jako osobny element z polami name, description, status, priority, daty itd.) → do Compile Task Data.\n\nKONFIGURACJA: wymaga credentiala ClickUp OAuth2. Podmień list i space na swoje — w węźle wybierz Team/Space/Folder/List z list rozwijanych po podłączeniu credentiala. To lista, z której czytasz zadania (źródłowa), nie ta, do której zapisujesz raport.\n\nPUŁAPKA: jeśli lista jest pusta, węzeł zwróci brak danych — to obsługuje dalej węzeł walidacji (gałąź błędu).",
+      "notesInFlow": false
+    },
+    {
+      "id": "f6e65f4d-0d6e-41af-a1ca-d9a367d2ce50",
+      "name": "Log Error Status",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        896,
+        512
+      ],
+      "parameters": {
+        "name": "={{$now.format('D HH:mm')}} BŁĄD",
+        "space": "90154501378",
+        "resource": "list",
+        "operation": "create",
+        "authentication": "oAuth2",
+        "additionalFields": {}
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Obsługa błędu — gdy nie pobrano żadnych zadań, tworzy w ClickUp listę oznaczającą nieudany przebieg. Pierwszy węzeł ścieżki błędu.\n\nMECHANIZM: operacja create na zasobie list. Nazwa: {{$now.format('D HH:mm')}} BŁĄD — np. „7 08:00 BŁĄD\" (data + godzina + znacznik błędu), w przestrzeni space 90154501378 (do podmiany). Dzięki temu w ClickUp zostaje widoczny ślad, że tego dnia raport się nie wygenerował.\n\nWEJŚCIE: gałąź FALSE z Verify Data Retrieval (brak danych).\nWYJŚCIE: → Terminate on Error.\n\nKONFIGURACJA: podmień space na swoje. Credential ClickUp OAuth2.\n\nPO CO: zamiast po cichu nie zrobić nic, workflow zostawia w ClickUp czytelny sygnał „brak danych do raportu\" — łatwiej zauważyć, że coś jest nie tak ze źródłową listą.",
+      "notesInFlow": false
+    },
+    {
+      "id": "7960bf8c-131a-45ee-9792-19596598e4a4",
+      "name": "Terminate on Error",
+      "type": "n8n-nodes-base.stopAndError",
+      "position": [
+        1072,
+        512
+      ],
+      "parameters": {
+        "errorMessage": "Nie udało się pobrać danych."
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Jawnie zatrzymuje workflow błędem po odnotowaniu niepowodzenia. Ostatni węzeł ścieżki błędu.\n\nMECHANIZM: węzeł Stop And Error z komunikatem „Nie udało się pobrać danych.\" Rzuca błąd, przez co przebieg workflow kończy się statusem failed (widocznym w historii wykonań n8n i ewentualnych powiadomieniach o błędach).\n\nWEJŚCIE: z Log Error Status.\nWYJŚCIE: brak — celowo przerywa wykonanie.\n\nPO CO: rozróżnia „przebieg zakończony sukcesem, ale bez raportu\" od „przebieg zawiódł\". Dzięki jawnemu błędowi monitoring n8n (np. workflow obsługi błędów albo alert) może wychwycić nieudane raporty. Bez tego węzła pusta lista kończyłaby się „cichym sukcesem\", który trudno zauważyć.",
+      "notesInFlow": false
+    },
+    {
+      "id": "498d8ac9-6e94-4536-ab68-dfbcfc9568da",
+      "name": "Daily 8am Report Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.3,
+      "notes": "ROLA: Punkt wejścia workflow — wyzwalacz harmonogramu (Schedule Trigger). Uruchamia cały proces raportowania automatycznie, bez udziału człowieka.\n\nMECHANIZM: reguła interwału ustawiona na triggerAtHour = 8 — workflow odpala się codziennie o godzinie 8:00. Godzina liczona jest w strefie czasowej instancji n8n (ustawienie Settings → Timezone), nie UTC.\n\nWEJŚCIE: brak — to trigger, startuje sam wg zegara.\nWYJŚCIE: sygnał startu → do Retrieve ClickUp Task List.\n\nKONFIGURACJA: zmień triggerAtHour, jeśli chcesz inną porę. Możesz dodać więcej reguł (np. co godzinę, w wybrane dni) w parametrze rule. Upewnij się, że strefa czasowa instancji jest poprawna — inaczej raport wyjdzie o innej godzinie, niż myślisz.\n\nUWAGA: workflow musi być AKTYWNY, żeby trigger harmonogramu działał — w trybie testowym (edytor) odpala się tylko ręcznie.",
+      "notesInFlow": false
+    },
+    {
+      "id": "5d4b8876-24bf-499d-b318-7d94c9fef49c",
+      "name": "Generate Summary Report",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        1472,
+        0
+      ],
+      "parameters": {
+        "list": "={{ $('Build Report List').item.json.id }}",
+        "name": "Raport",
+        "authentication": "oAuth2",
+        "additionalFields": {
+          "content": "={{ $json.output }}"
+        }
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Zapisuje wygenerowany przez AI raport do ClickUp jako zadanie. Końcowy węzeł ścieżki sukcesu.\n\nMECHANIZM: tworzy zadanie o nazwie „Raport\" w liście utworzonej przez Build Report List (list = {{ $('Build Report List').item.json.id }}). Treść raportu ląduje w opisie zadania: content = {{ $json.output }} (output z Task Analysis Agent).\n\nWEJŚCIE: raport z Task Analysis Agent.\nWYJŚCIE: brak — koniec ścieżki sukcesu. Efekt jest w ClickUp: nowa lista z zadaniem „Raport\" zawierającym dzienne podsumowanie.\n\nKONFIGURACJA: credential ClickUp OAuth2. Nazwa zadania i mapowanie treści są gotowe — działa automatycznie, o ile poprzednie węzły dostarczyły listę i output.\n\nDLACZEGO OSOBNE ZADANIE: raport jako zadanie w ClickUp jest od razu widoczny dla zespołu w ich narzędziu, bez potrzeby zaglądania do n8n czy maila.",
+      "notesInFlow": false
+    },
+    {
+      "id": "3051b25a-b75e-4177-9520-c5381cca57a7",
+      "name": "Build Report List",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        896,
+        -80
+      ],
+      "parameters": {
+        "name": "={{$now.format('D HH:mm')}} raport",
+        "space": "90154501378",
+        "resource": "list",
+        "operation": "create",
+        "authentication": "oAuth2",
+        "additionalFields": {}
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Tworzy w ClickUp nową listę na dzisiejszy raport — świeży kontener na wynik każdego przebiegu.\n\nMECHANIZM: operacja create na zasobie list. Nazwa listy generowana dynamicznie: {{$now.format('D HH:mm')}} raport — czyli np. „7 08:00 raport\" (dzień miesiąca + godzina). Tworzona w przestrzeni space 90154501378 (ID autora, do podmiany).\n\nWEJŚCIE: gałąź TRUE z Verify Data Retrieval.\nWYJŚCIE: dane utworzonej listy (w tym jej id i name) → do Task Analysis Agent. Agent dostaje name listy w prompcie, a Generate Summary Report użyje id, żeby dodać do niej zadanie.\n\nKONFIGURACJA: podmień space na swoje. Credential ClickUp OAuth2.\n\nDLACZEGO NOWA LISTA CO DZIEŃ: każdy dzienny raport ląduje w osobnej, datowanej liście — historia raportów jest przejrzysta, nie miesza się w jednej liście.",
+      "notesInFlow": false
+    },
+    {
+      "id": "a2b07cac-aaa1-419c-aa37-1caa6280ca78",
+      "name": "Task Analysis Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "text": "=Jesteś asystentem AI, który analizuje bieżące zadania zespołu i na ich podstawie przygotowuje dzienny raport dla listy o nazwie \"{{ $json.name }}\".\n\nNapisz raport WYŁĄCZNIE po polsku. W raporcie:\n- podsumuj stan bieżących zadań (co jest w toku, co zaległe, co pilne),\n- wskaż priorytety na dziś,\n- zaproponuj konkretne nowe zadania do wykonania.\n\nZwróć gotowy raport jako czytelny tekst (zostanie zapisany jako opis zadania w ClickUp).\n\nLista zadań:\n{{ $('Compile Task Data').item.json.tasksOutput }}",
+        "options": {},
+        "promptType": "define"
+      },
+      "typeVersion": 3.1,
+      "notes": "ROLA: Serce workflow — AI Agent, który na podstawie zebranych zadań pisze treść dziennego raportu. Sercem generowania jest podłączony model językowy.\n\nMECHANIZM: promptType = define (własny prompt, nie chat). Prompt (po polsku) instruuje agenta, by przeanalizował listę zadań, podsumował ich stan, wskazał priorytety i zaproponował nowe zadania — oraz by napisał raport WYŁĄCZNIE po polsku. Do promptu wstrzykiwane są: nazwa listy raportu ({{ $json.name }} z Build Report List) i blok zadań ({{ $('Compile Task Data').item.json.tasksOutput }}).\n\nMODEL: dostaje go z podłączonego węzła AI Conversational Model (OpenRouter) przez port ai_languageModel.\n\nWEJŚCIE: dane listy z Build Report List (nazwa) + pośrednio tekst zadań z Compile Task Data.\nWYJŚCIE: wygenerowany raport w polu output → do Generate Summary Report, który zapisze go jako opis zadania w ClickUp.\n\nUWAGA (rozbieżność szablonu): oryginalny prompt kazał agentowi „użyć narzędzia, by utworzyć zadania\" — ale do agenta NIE jest podłączony żaden węzeł-narzędzie (ai_tool). Agent nie tworzy więc zadań sam; po prostu zwraca tekst raportu, który dopiero węzeł ClickUp zapisuje. Mylące zdanie usunięto z promptu. Jeśli chcesz, by agent sam zakładał zadania w ClickUp, podłącz do niego narzędzie ClickUp jako ai_tool.",
+      "notesInFlow": false
+    },
+    {
+      "id": "a38a7cc2-e556-425a-9b3d-ce4a00702339",
+      "name": "AI Conversational Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "position": [
+        1120,
+        160
+      ],
+      "parameters": {
+        "model": "openai/o3-mini",
+        "options": {}
+      },
+      "typeVersion": 1,
+      "notes": "ROLA: Model językowy zasilający AI Agenta — to on faktycznie generuje tekst raportu. Sam nie jest podłączony do głównego przepływu, tylko do agenta.\n\nMECHANIZM: węzeł OpenRouter Chat Model z modelem openai/o3-mini. OpenRouter to broker dający dostęp do wielu modeli (OpenAI, Anthropic, i in.) przez jeden klucz API. Podłączony do Task Analysis Agent przez port ai_languageModel (nie przez zwykłe main).\n\nWEJŚCIE/WYJŚCIE: nie ma połączeń main — działa jako „pod-węzeł\" agenta. Agent wywołuje go pod spodem, przekazując prompt i odbierając odpowiedź.\n\nKONFIGURACJA: wymaga credentiala OpenRouter (klucz API z openrouter.ai). Model openai/o3-mini możesz zmienić na dowolny z oferty OpenRouter (np. tańszy do prostych raportów albo mocniejszy do głębszej analizy) — wpisz jego identyfikator w polu model.\n\nUWAGA: o3-mini to model rozumujący OpenAI — dobry do syntezy i priorytetyzacji, ale sprawdź jego dostępność i cenę na swoim koncie OpenRouter.",
+      "notesInFlow": false
+    }
+  ],
+  "connections": {
+    "Log Error Status": {
+      "main": [
+        [
+          {
+            "node": "Terminate on Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report List": {
+      "main": [
+        [
+          {
+            "node": "Task Analysis Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Task Data": {
+      "main": [
+        [
+          {
+            "node": "Verify Data Retrieval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Analysis Agent": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Data Retrieval": {
+      "main": [
+        [
+          {
+            "node": "Build Report List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Conversational Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Task Analysis Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 8am Report Trigger": {
+      "main": [
+        [
+          {
+            "node": "Retrieve ClickUp Task List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve ClickUp Task List": {
+      "main": [
+        [
+          {
+            "node": "Compile Task Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "600d726c-20c2-45b0-89ce-a62a9f25d141",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-07T08:02:23.375Z",
+      "createdAt": "2026-07-07T08:02:23.375Z",
+      "role": "workflow:owner",
+      "workflowId": "cDXyjZdxbAwzNG0n",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

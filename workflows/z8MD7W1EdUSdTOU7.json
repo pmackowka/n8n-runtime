@@ -1,0 +1,653 @@
+{
+  "updatedAt": "2026-09-01T13:23:03.981Z",
+  "createdAt": "2026-07-06T09:04:53.730Z",
+  "id": "z8MD7W1EdUSdTOU7",
+  "name": "004 — Create viral AI celebrity selfies with Nano Banana Pro & upload to Instagram",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://api.runpod.ai/v2/nano-banana-pro-edit/status/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "id": "67327651-323e-4e31-8a8f-c9fb8d12970b",
+      "name": "Get status clip",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1312,
+        800
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "Odpytuje RunPod o status zadania generacji (GET na endpoint /status/{id}). Używa identyfikatora zwróconego przez węzeł Generate selfie i tego samego uwierzytelniania httpBearerAuth. Zwraca aktualny stan zadania — pole status oraz, po zakończeniu, wynik z URL-em obrazu. Odpowiedź trafia do węzła warunkowego, który decyduje, czy generacja już się skończyła. To krok kontrolny pętli pollingu."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "383d112e-2cc6-4dd4-8985-f09ce0bd1781",
+              "operator": {
+                "name": "filter.operator.equals",
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d53584f6-ab01-46f6-8793-3d89ec0cf68a",
+      "name": "Completed?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1504,
+        800
+      ],
+      "typeVersion": 2.2,
+      "notesInFlow": false,
+      "notes": "Węzeł warunkowy (IF) sterujący pętlą pollingu. Sprawdza, czy status zadania równa się COMPLETED. Jeśli tak (wyjście true), workflow pobiera obraz i uruchamia agenta podpisu. Jeśli nie (wyjście false), wraca do węzła Wait 20 sec. i odpytuje ponownie. To serce mechanizmu czekania na asynchroniczną generację — pętla kręci się, aż RunPod zgłosi ukończenie. Bez tego warunku workflow próbowałby pobrać obraz, zanim będzie gotowy."
+    },
+    {
+      "parameters": {
+        "formTitle": "Selfie with Celebrities",
+        "formFields": {
+          "values": [
+            {
+              "fieldName": "IMAGE_URL",
+              "fieldLabel": "Your selfie",
+              "requiredField": true
+            },
+            {
+              "fieldName": "PROMPT",
+              "fieldLabel": "The prompt",
+              "defaultValue": "Ultra-realistic viral AI photo, based on the uploaded reference image of me. Scene set in a modern television studio with professional lighting, cinematic look. Half-body shot (medium close-up), realistic proportions. Next to me is LeBron James, standing confidently with one hand resting naturally on my shoulder, friendly and iconic presence. My facial expression is changed: confident, slightly surprised and charismatic, natural smile, expressive eyes. Both subjects are perfectly integrated with matching lighting, shadows, and depth of field. Photorealistic skin texture, sharp focus, high detail, studio camera quality, 4K resolution. Looks like an authentic behind-the-scenes TV moment, viral social media style, no distortion, no extra people, no artifacts.",
+              "requiredField": true
+            },
+            {
+              "fieldName": "FORMAT",
+              "fieldLabel": "Aspect Ratio",
+              "fieldType": "dropdown",
+              "defaultValue": "9:16",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1:1"
+                  },
+                  {
+                    "option": "4:3"
+                  },
+                  {
+                    "option": "9:16"
+                  },
+                  {
+                    "option": "16:9"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "546f631a-3d7f-44a6-b705-053315c06ff8",
+      "name": "On form submission",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [
+        352,
+        800
+      ],
+      "webhookId": "a0009d2c-d30c-4ee9-8125-2e35aedf3073",
+      "typeVersion": 2.4,
+      "notesInFlow": false,
+      "notes": "Punkt wejścia workflow — formularz uruchamiany przez użytkownika (Form Trigger). Zbiera trzy pola: URL Twojego selfie (IMAGE_URL), prompt opisujący scenę z celebrytą (PROMPT, z gotowym domyślnym przykładem) oraz proporcje kadru (FORMAT: 1:1, 4:3, 9:16, 16:9). Po wysłaniu formularza dane lecą dalej do normalizacji i generacji obrazu. Formularz n8n w trybie testowym działa lokalnie bez tunelu; produkcyjnie wymaga publicznego URL. To tu decyduje się, jak wygląda finalne selfie — prompt i zdjęcie referencyjne są wejściem dla modelu."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.postiz.com/public/v1/upload",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "32adfa42-d4d3-4352-ba42-8b8137d4a81e",
+      "name": "Upload to Postiz",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2432,
+        800
+      ],
+      "typeVersion": 4.2,
+      "notesInFlow": false,
+      "notes": "Wgrywa binarny obraz do Postiz (POST multipart na endpoint /public/v1/upload). Postiz to platforma do zarządzania i publikacji w social media — najpierw trzeba wrzucić do niej plik, zanim powstanie post. Uwierzytelnia się przez httpHeaderAuth (klucz API Postiz w nagłówku). Zwraca identyfikator i ścieżkę wgranego pliku, których używa kolejny węzeł do złożenia posta. To krok pośredni między obrazem a właściwą publikacją."
+    },
+    {
+      "parameters": {
+        "date": "={{ $now.format('yyyy-LL-dd') }}T{{ $now.format('HH:ii:ss') }}",
+        "posts": {
+          "post": [
+            {
+              "value": {
+                "contentItem": [
+                  {
+                    "image": {
+                      "imageItem": [
+                        {
+                          "id": "={{ $json.id }}",
+                          "path": "={{ $json.path }}"
+                        }
+                      ]
+                    },
+                    "content": "={{ $('Merge').item.json.content.parts[0].text }}"
+                  }
+                ]
+              },
+              "integrationId": "XXX"
+            }
+          ]
+        },
+        "shortLink": true
+      },
+      "id": "dbda859c-37bd-44a8-8d39-1cf3797290c7",
+      "name": "Upload to Social",
+      "type": "n8n-nodes-postiz.postiz",
+      "position": [
+        2688,
+        800
+      ],
+      "typeVersion": 1,
+      "notesInFlow": false,
+      "notes": "Publikuje finalny post przez węzeł Postiz (community node n8n-nodes-postiz.postiz). Składa post z wgranego obrazu (id i ścieżka z poprzedniego węzła) oraz podpisu wygenerowanego przez SMC Agenta. Kieruje go na wybrany kanał social przez integrationId — w szablonie placeholder XXX, do podmiany na Twój Channel_ID z panelu Postiz. Uwierzytelnia się przez credential postizApi. To node społecznościowy — jeśli pakietu n8n-nodes-postiz nie masz zainstalowanego, węzeł pojawi się jako nierozpoznany do czasu instalacji. To końcowy krok flow — moment publikacji na Instagramie."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "73ca64f8-cb9f-4ef4-a7b0-5378cffb85a2",
+              "name": "image_url",
+              "type": "string",
+              "value": "={{ $json.IMAGE_URL }}"
+            },
+            {
+              "id": "9505e1ad-57f3-4585-adc5-66063200c0aa",
+              "name": "prompt",
+              "type": "string",
+              "value": "={{ $json.PROMPT }}"
+            },
+            {
+              "id": "bb744599-c219-4638-90e6-9b203826fd61",
+              "name": "aspect_ratio",
+              "type": "string",
+              "value": "={{ $json.FORMAT }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c1451a41-1377-4a34-a294-59544ea2a330",
+      "name": "Set data",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        592,
+        800
+      ],
+      "typeVersion": 3.4,
+      "notesInFlow": false,
+      "notes": "Normalizuje pola z formularza do czytelnych nazw zmiennych. Mapuje IMAGE_URL na image_url, PROMPT na prompt, a FORMAT na aspect_ratio. Dzięki temu kolejne węzły odwołują się do spójnych, prostych kluczy zamiast do surowych nazw pól formularza. To czysto porządkowy krok, bez logiki biznesowej. Wynik trafia do węzła generującego obraz."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.runpod.ai/v2/nano-banana-pro-edit/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"input\": {\n    \"prompt\": \"{{ $json.prompt }}\",\n    \"images\": [\n      \"{{ $json.image_url }}\"\n    ],\n    \"resolution\": \"1k\",\n    \"output_format\": \"jpeg\",\n    \"enable_base64_output\": false,\n    \"enable_sync_mode\": false,\n    \"aspect_ratio\": \"{{ $json.aspect_ratio }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "bd15727f-a546-4dfc-9f1e-f6ae826b7440",
+      "name": "Generate selfie",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        848,
+        800
+      ],
+      "typeVersion": 4.3,
+      "notesInFlow": false,
+      "notes": "Wysyła żądanie generacji obrazu do API Nano Banana Pro Edit hostowanego na RunPod (POST na endpoint /run). W ciele JSON przekazuje prompt, referencyjne zdjęcie (images) oraz proporcje kadru; ustawia rozdzielczość 1k i format JPEG. Uwierzytelnia się przez httpBearerAuth — tu wpisujesz klucz RunPod API. Zadanie jest asynchroniczne: endpoint nie zwraca obrazu od razu, tylko identyfikator zadania (id), po którym workflow odpytuje status. To najwolniejszy i najdroższy krok — właściwa generacja AI. Bez credentiali RunPod ten węzeł nie zadziała."
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "id": "d5236f81-7dda-40be-9298-f4c727bd98ba",
+      "name": "Wait 20 sec.",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        1120,
+        800
+      ],
+      "webhookId": "6e76490d-5c92-40a4-afe8-dff62a6a2286",
+      "typeVersion": 1.1,
+      "notesInFlow": false,
+      "notes": "Pauza 20 sekund w pętli odpytywania statusu generacji. Model potrzebuje czasu na wygenerowanie obrazu, więc workflow nie sprawdza wyniku natychmiast. Po odczekaniu przechodzi do sprawdzenia statusu zadania. Jeśli obraz wciąż nie jest gotowy, pętla wraca tutaj i czeka kolejne 20 sekund. To standardowy wzorzec pollingu dla zadań asynchronicznych."
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "6d55b4eb-b9ad-45fd-b7cc-b43251fcb96f",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        2208,
+        800
+      ],
+      "typeVersion": 3.2,
+      "notesInFlow": false,
+      "notes": "Łączy dwie gałęzie workflow w jeden element: obraz z węzła Get image oraz podpis z SMC Agenta. Tryb combine z opcją combineAll scala wszystkie pola z obu wejść. Dzięki temu dalsze węzły mają w jednym miejscu i plik, i tekst posta. To punkt zejścia się równoległych torów: generacji podpisu i pobrania obrazu. Bez merge upload nie miałby kompletu danych do publikacji."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.output.result }}",
+        "options": {}
+      },
+      "id": "9574f218-294f-44c4-b5a7-c6eb976886d6",
+      "name": "Get image",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1840,
+        1120
+      ],
+      "typeVersion": 4.3,
+      "notesInFlow": false,
+      "notes": "Pobiera gotowy obraz jako dane binarne z URL-a zwróconego przez RunPod (pole output.result). Nie wymaga uwierzytelniania — to bezpośredni link do wygenerowanego pliku. Binarny obraz idzie dwiema drogami: do węzła Merge (żeby połączyć go z podpisem) oraz do uploadu na Google Drive. To moment, w którym gotowe selfie wchodzi do workflow jako plik. Od tego węzła operujemy już na obrazie, nie na jego adresie."
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-2.5-flash",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "=Jesteś twórcą wirusowych treści social media i analitykiem wizualnym wyspecjalizowanym we wzroście na Instagramie.\nTwoim zadaniem jest szczegółowo przeanalizować przesłany obraz i wygenerować wysoce angażujący, wirusowy post na Instagram PO POLSKU, kierowany do polskiej publiczności.\n\nWykonaj poniższe kroki dokładnie:\n\n1. Przeanalizuj obraz\n   - Zidentyfikuj osoby, scenerię, emocje, mowę ciała, wyraz twarzy, ubiór i ogólny nastrój.\n   - Wykryj, czy obraz sprawia wrażenie autentycznego, kinowego, swobodnego, ekskluzywnego czy zza kulis.\n   - Zrozum, co czyni obraz oddziałującym emocjonalnie lub społecznie.\n\n2. Określ wirusowy kąt (angle)\n   - Wybierz najmocniejszy hook (status, zaskoczenie, pewność siebie, sukces, inspiracja, ironia, ekskluzywność).\n   - Przedstaw obraz jako moment, który ludzie chcieliby skomentować, udostępnić lub zapisać.\n\n3. Napisz podpis na Instagram\n   - Pisz WYŁĄCZNIE po polsku, naturalnym, potocznym językiem dla polskiej publiczności.\n   - Zacznij od mocnego hooka w pierwszej linii (zatrzymującego przewijanie).\n   - Utrzymaj ton naturalny, pewny siebie i bliski odbiorcy.\n   - Używaj krótkich akapitów lub przełamań linii dla czytelności.\n   - Wpleć subtelny storytelling lub odważne stwierdzenie.\n   - Zakończ wezwaniem do działania (komentarz, oznaczenie, reakcja lub udostępnienie).\n\n4. Dodaj hashtagi\n   - Umieść 5–10 trafnych hashtagów po polsku lub powszechnie używanych na polskim Instagramie.\n   - Wymieszaj szerokie wirusowe hashtagi z niszowymi i kontekstowymi.\n   - Dołącz hashtag oznaczający treść AI (np. #AI lub #WygenerowanePrzezAI).\n   - Unikaj spamerskiego lub ogólnikowego przeładowania hashtagami.\n\n5. Oznaczenie AI (WYMAGANE) oraz wytyczne stylu\n   - OZNACZ WYRAŹNIE, że obraz został wygenerowany przez AI — dodaj w podpisie osobną, czytelną linię z informacją, że grafika powstała z użyciem AI. To wymóg zgodności z polityką Meta/Instagrama; nie pomijaj go.\n   - NIE używaj emoji nadmiernie (maks. 2–3).\n   - Brzmij po ludzku, autentycznie i natywnie dla platformy.\n   - Optymalizuj pod zaangażowanie i wirusowość, ale nigdy kosztem oznaczenia AI.\n\nZwróć wyłącznie:\n- Finalny podpis na Instagram (po polsku, z wyraźną informacją, że grafika powstała z AI)\n- Hashtagi (w nowej linii, z hashtagiem oznaczającym AI)",
+        "imageUrls": "={{ $json.output.result }}",
+        "options": {}
+      },
+      "id": "398fd4f2-1ec6-4e54-95a8-1060ff510d61",
+      "name": "SMC Agent",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "position": [
+        1840,
+        784
+      ],
+      "typeVersion": 1.1,
+      "notesInFlow": false,
+      "notes": "Agent treści social media (SMC = Social Media Content) oparty o Google Gemini. Analizuje wygenerowany obraz multimodalnie — osoby, scenerię, emocje, mowę ciała, nastrój — i na tej podstawie pisze wirusowy podpis na Instagram wraz z hashtagami. Prompt jest po polsku i wymusza pisanie podpisu po polsku, dla polskiej publiczności. Narzuca mocny hook w pierwszej linii, naturalny ton, call to action i 5–10 dobranych hashtagów. Wymaga też wyraźnego oznaczenia, że grafika powstała z AI — zgodnie z polityką Meta/Instagrama. Model dostaje obraz multimodalnie, więc podpis odnosi się do tego, co faktycznie widać na zdjęciu. Uwierzytelnia się przez credential Google Gemini (googlePalmApi). Wynik (tekst podpisu z hashtagami) trafia do węzła Merge."
+    },
+    {
+      "parameters": {
+        "name": "=image_{{ $now.format('yyyyLLddHHiiss') }}_{{$binary.data.fileName}}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1xT3rJm2PMjOTsSQFk6QP_Tt6J8z2R0x4",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1xT3rJm2PMjOTsSQFk6QP_Tt6J8z2R0x4",
+          "cachedResultName": "Runpod"
+        },
+        "options": {}
+      },
+      "id": "42f65603-641e-4621-a90e-759b37ce17c4",
+      "name": "Upload file",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [
+        2432,
+        1120
+      ],
+      "typeVersion": 3,
+      "notesInFlow": false,
+      "notes": "Zapisuje wygenerowany obraz na Google Drive jako archiwum. Nazwę pliku buduje z bieżącej daty i oryginalnej nazwy binarki. Trafia do wskazanego folderu (w szablonie autora: Runpod) — to wartość instancyjna do zmiany na swój folder. Uwierzytelnia się przez Google Drive OAuth2. Ten tor jest równoległy do publikacji: Drive służy jako backup, niezależnie od wrzutki na social, i nie blokuje ścieżki publikacji."
+    },
+    {
+      "parameters": {
+        "content": "## Wirusowe selfie z celebrytami — Nano Banana Pro → Instagram\n\nTen workflow automatyzuje tworzenie **selfie z celebrytami generowanych przez AI** za pomocą **Nano Banana Pro Edit** przez [RunPod](https://www.runpod.io), pisze angażujące podpisy pod social media i publikuje treść na **Instagramie** przez [Postiz](https://postiz.com). Zaczyna się od formularza, w którym użytkownik podaje URL zdjęcia, własny prompt i proporcje kadru.\n\n### **Jak to działa:**\n\nGdy użytkownik wyśle formularz z URL-em zdjęcia, promptem i proporcjami, dane lecą do API Nano Banana Pro Edit na RunPod, które generuje obraz. Workflow odpytuje status w pętli, aż obraz będzie gotowy, po czym Google Gemini pisze angażujący podpis i hashtagi. Gotowy obraz ląduje na Google Drive i zostaje opublikowany przez Postiz na Instagramie. Logika warunkowa, węzły Wait i obsługa błędów pilnują płynnego przebiegu od uploadu po publikację.\n\n### **Kroki konfiguracji:**\n\nSkonfiguruj credentiale API dla RunPod (HTTP Bearer), Google Gemini, Postiz i Google Drive (OAuth2). Przygotuj Form Trigger z polami `IMAGE_URL`, `PROMPT` i `FORMAT`. Zaktualizuj URL-e endpointów i ID folderów w odpowiednich węzłach oraz podmień placeholderowe integration ID Postiz. Przetestuj workflow na przykładowych danych z formularza, aktywuj go i obserwuj log wykonania w n8n.",
+        "height": 560,
+        "width": 752
+      },
+      "id": "781153ff-5cea-46b6-94e9-e68a4fb077f3",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        272,
+        48
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## START\n![image](https://n3wstorage.b-cdn.net/n3witalia/result3.png)",
+        "height": 560,
+        "width": 384,
+        "color": 6
+      },
+      "id": "54669f7a-36c1-493a-abf5-e21d7328301d",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1040,
+        48
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## WYNIK\n![image](https://n3wstorage.b-cdn.net/n3witalia/result_lbj.jpeg)",
+        "height": 560,
+        "width": 352,
+        "color": 6
+      },
+      "id": "59d8aa21-bcbb-4140-8b95-d601d34f5a8c",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1440,
+        48
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## KROK 1 — Ustaw prompt i swoje selfie\nWysyła zdjęcie i prompt",
+        "height": 320,
+        "width": 496,
+        "color": 7
+      },
+      "id": "a66ce1a5-8945-45fc-9eff-88a8f16c82ff",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        272,
+        656
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## KROK 2 — Wygeneruj obraz z celebrytami\nDodaj credentiale [RunPod API](https://www.runpod.io) pod `httpBearerAuth`",
+        "height": 320,
+        "width": 672,
+        "color": 7
+      },
+      "id": "56c3a895-a522-49de-a774-843dd81c18d8",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        800,
+        656
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## KROK 3 — Agent treści social media\nGeneruje gotowy do virala podpis na Instagram i hashtagi",
+        "height": 320,
+        "width": 448,
+        "color": 7
+      },
+      "id": "3e937676-e351-45c9-83d4-bc99f5890f65",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1712,
+        656
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## KROK 4 — Upload na Drive\nWrzuca obraz na Google Drive",
+        "height": 272,
+        "width": 496,
+        "color": 7
+      },
+      "id": "e1b2d45a-4134-4a5f-841f-5296dc9e55c7",
+      "name": "Sticky Note6",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2384,
+        1008
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## KROK 5 — Upload na Instagram\nZałóż DARMOWE konto na [Postiz](https://postiz.com) i ustaw Channel_ID z panelu",
+        "height": 304,
+        "width": 496,
+        "color": 7
+      },
+      "id": "2e388c4a-f198-4946-9e58-f01bad6e3d38",
+      "name": "Sticky Note7",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2384,
+        656
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Upload to Postiz",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set data": {
+      "main": [
+        [
+          {
+            "node": "Generate selfie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get image": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMC Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completed?": {
+      "main": [
+        [
+          {
+            "node": "Get image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SMC Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 20 sec.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 20 sec.": {
+      "main": [
+        [
+          {
+            "node": "Get status clip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate selfie": {
+      "main": [
+        [
+          {
+            "node": "Wait 20 sec.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get status clip": {
+      "main": [
+        [
+          {
+            "node": "Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Postiz": {
+      "main": [
+        [
+          {
+            "node": "Upload to Social",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Set data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "af1231a2-4c86-4f5d-82ea-15f9b27bb00d",
+  "activeVersionId": null,
+  "versionCounter": 6,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-06T09:04:53.732Z",
+      "createdAt": "2026-07-06T09:04:53.732Z",
+      "role": "workflow:owner",
+      "workflowId": "z8MD7W1EdUSdTOU7",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

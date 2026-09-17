@@ -1,0 +1,526 @@
+{
+  "updatedAt": "2026-09-01T13:23:03.755Z",
+  "createdAt": "2026-06-29T14:06:12.915Z",
+  "id": "19Fh3m5vASsZFfMK",
+  "name": "002 — RAG chatbot for company documents using Google Drive and Gemini",
+  "description": "RAG: Google Drive (ingestia plików) → Pinecone vector store z embeddingami Gemini; chat → AI Agent (Gemini) z narzędziem Vector Store odpytującym Pinecone. Odtworzone z szablonu n8n #2753.",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1evDIoHePhjw_LgVFZXSZyK1sZm2GHp9W",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1evDIoHePhjw_LgVFZXSZyK1sZm2GHp9W",
+          "cachedResultName": "INNOVI PRO"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "ae2479a9-c03f-4a0b-8967-0d3587dd033f",
+      "name": "Google Drive File Created",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -128
+      ],
+      "notes": "Trigger toru ingestii. Pollinguje wskazany folder Google Drive co minutę i wykrywa nowo dodane pliki. Każdy nowy plik odpala pobranie zawartości i dalszą indeksację. Działa przez polling API Drive, więc nie wymaga webhooka ani tunelu — osiąga świat z localhostu sam. Przekazuje dalej metadane pliku, w tym ID i nazwę, których używa kolejny węzeł do pobrania treści.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}"
+        },
+        "options": {
+          "fileName": "={{ $json.name }}"
+        }
+      },
+      "id": "3d6ae58b-5981-43a5-abdb-e4e6ddc0b0a6",
+      "name": "Download File From Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        464,
+        0
+      ],
+      "notes": "Pobiera zawartość pliku wskazanego przez trigger jako dane binarne, używając jego ID z metadanych. Te dane binarne (PDF, DOCX itd.) idą dalej do Data Loadera, który wyciągnie z nich tekst. Bez tego kroku workflow miałby tylko metadane pliku, nie jego treść. Nazwę pliku przenosi w opcjach, żeby zachować ją w dalszym przetwarzaniu. To pomost między zdarzeniem w Drive a właściwą wektoryzacją.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "company-files",
+          "cachedResultName": "company-files"
+        },
+        "options": {}
+      },
+      "id": "9f397d94-ff99-41eb-8552-1d7891f1fd5b",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        688,
+        0
+      ],
+      "notes": "Docelowe miejsce ingestii — w trybie insert zapisuje fragmenty dokumentu do bazy wektorowej Pinecone. Dostaje dwa wejścia bocznymi portami: embeddingi z modelu Gemini (ai_embedding) oraz pocięty dokument z Data Loadera (ai_document). Indeks Pinecone musi mieć wymiar zgodny z modelem embeddingów — dla text-embedding-004 jest to 768 wymiarów, metryka cosine. To z tej samej bazy czyta później strona retrieval. Węzeł nie zapisuje metadanej fileId ani nie czyści wcześniejszych wektorów pliku, więc ponowna indeksacja tego samego dokumentu tworzy duplikaty. Produkcyjnie warto dołożyć metadatę fileId i usuwanie starych wektorów przed wstawieniem, żeby indeks pozostał idempotentny.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/text-embedding-004"
+      },
+      "id": "d72387fe-0a99-4ad3-9541-28efcf55322c",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        640,
+        288
+      ],
+      "notes": "Zamienia fragmenty tekstu na wektory liczbowe modelem text-embedding-004. To te wektory umożliwiają wyszukiwanie po znaczeniu, a nie po słowach kluczowych. Podłączony do węzła Pinecone portem ai_embedding po stronie zapisu. Model embeddingów musi być identyczny z tym po stronie odczytu — inaczej wektory bazy i wektory zapytania nie są porównywalne. To jedna z najczęstszych pułapek utrzymaniowych RAG-a.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "binaryMode": "specificField",
+        "options": {},
+        "textSplittingMode": "custom"
+      },
+      "id": "a8f12210-39d1-4bdf-96c2-dbe98fa8e538",
+      "name": "Default Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [
+        848,
+        224
+      ],
+      "notes": "Łącznik między surowym plikiem a wektoryzacją — bierze dane binarne z Download File i przygotowuje je jako dokument do zaindeksowania. Tryb binary/specificField wskazuje, że źródłem jest binarka z poprzedniego węzła. Ma ustawiony textSplittingMode na custom, dzięki czemu faktycznie korzysta z podpiętego Text Splittera zamiast domyślnego cięcia. Wyciągnięty tekst przekazuje splitterowi do pocięcia na chunki, a wynik oddaje węzłowi Pinecone portem ai_document. Bez trybu custom podpięty splitter byłby po cichu ignorowany.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "chunkOverlap": 100,
+        "options": {}
+      },
+      "id": "69e2ee01-e40e-400c-8f9e-2ebddb97a33a",
+      "name": "Recursive Character Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        832,
+        432
+      ],
+      "notes": "Tnie długi tekst dokumentu na mniejsze, nakładające się fragmenty (chunki). Overlap 100 znaków sprawia, że kontekst nie urywa się gwałtownie na granicy fragmentu. Mniejsze chunki to trafniejsze wyszukiwanie i mniej tokenów wstrzykiwanych do odpowiedzi. Podłączony do Data Loadera portem ai_textSplitter i działa tylko dlatego, że loader ma tryb custom. Rekurencyjny splitter próbuje ciąć po naturalnych granicach (akapity, zdania), zanim sięgnie po twarde cięcie znakowe.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1evDIoHePhjw_LgVFZXSZyK1sZm2GHp9W",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1evDIoHePhjw_LgVFZXSZyK1sZm2GHp9W",
+          "cachedResultName": "INNOVI PRO"
+        },
+        "event": "fileUpdated",
+        "options": {}
+      },
+      "id": "32676d2b-b6fb-4ce6-a9f4-3d11490dc471",
+      "name": "Google Drive File Updated",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        144,
+        144
+      ],
+      "notes": "Drugi trigger toru ingestii, bliźniaczy do File Created, ale reaguje na zmianę istniejącego pliku zamiast na utworzenie. Dzięki niemu edycja dokumentu również trafia do bazy wektorowej. Również pollinguje folder co minutę. Oba triggery zbiegają się w tym samym kroku Download File. Warto wiedzieć, że ponowne wrzucenie tego samego pliku dokłada nowe wektory obok starych — workflow nie deduplikuje po fileId, więc po wielu edycjach w bazie narastają duplikaty chunków.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "df08c05b-643c-4bf8-9716-612902776b22",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        848
+      ],
+      "webhookId": "3ea03c63-47a2-4b17-8bba-4e736ab1ec23",
+      "notes": "Punkt wejścia toru odpytywania — wbudowany interfejs czatu n8n. Odpala AI Agenta przy każdej wiadomości użytkownika i przekazuje mu treść pytania. Przy pracy lokalnej nie wymaga tunelu ani zewnętrznego webhooka. Dostarcza też identyfikator sesji rozmowy, z którego automatycznie korzysta pamięć agenta. To odpowiednik Slack Triggera z workflow 001, ale dla natywnego czatu n8n.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Jesteś pomocnym asystentem HR, którego zadaniem jest odpowiadanie na pytania pracowników w oparciu o polityki firmowe.\n\nWyszukaj odpowiednie informacje w dostarczonych dokumentach wewnętrznych i udziel zwięzłej, dokładnej i rzeczowej odpowiedzi na pytanie pracownika.\n\nUżyj narzędzia o nazwie \"company_documents_tool\", aby pobrać dowolne informacje z dokumentów firmy.\n\nJeśli nie znajdziesz odpowiedzi w dostarczonych dokumentach, odpowiedz \"Nie znajduję odpowiedzi w dostępnych zasobach.\""
+        }
+      },
+      "id": "5a57a318-63ce-4228-8958-9b223079d109",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        432,
+        848
+      ],
+      "notes": "Mózg toru chat — orkiestruje całą odpowiedź na pytanie pracownika. Dostaje pytanie z czatu, system prompt asystenta HR, model językowy, pamięć rozmowy i narzędzie Vector Store. Sam decyduje, kiedy sięgnąć po narzędzie company_documents_tool, żeby odpytać bazę dokumentów. System prompt wymusza opieranie odpowiedzi na dokumentach i zakazuje zmyślania — przy braku trafienia agent mówi wprost, że nie znajduje odpowiedzi w dostępnych zasobach. Trzy sub-węzły (model, pamięć, narzędzie) podłączone są bocznymi portami ai_languageModel, ai_memory i ai_tool. To wzorzec agentic RAG: agent jako router decydujący, czy i jak użyć wiedzy z bazy wektorowej.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "id": "6a89b091-e3bb-403a-b844-f7d92a5bf1ca",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        320,
+        1152
+      ],
+      "notes": "Model językowy napędzający AI Agenta po stronie czatu — rozumie pytanie, planuje użycie narzędzia i formułuje finalną odpowiedź dla pracownika. Podłączony do agenta portem ai_languageModel; bez niego agent nie ma rozumu. Używa modelu gemini-2.5-flash — szybkiego i taniego, wystarczającego do interpretacji pytania i redakcji odpowiedzi na bazie dokumentów. To jeden z dwóch chat modeli w workflow; drugi pracuje wewnątrz Vector Store Tool. Oba trzymaj na tej samej, stabilnej wersji modelu, żeby zachowanie było spójne.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {},
+      "id": "2b10e68e-0dff-462d-beed-a37dbc9a09ec",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        512,
+        1152
+      ],
+      "notes": "Pamięć krótkoterminowa rozmowy w czacie, podłączona do agenta portem ai_memory. Pozwala zadawać pytania nawiązujące do wcześniejszych i utrzymuje kontekst sesji między wiadomościami. Nie ma ustawionego sessionKey i tak jest poprawnie — Chat Trigger sam dostarcza identyfikator sesji (sessionIdType=fromInput), więc każda rozmowa dostaje własną, izolowaną pamięć automatycznie. To różnica względem workflow 001, gdzie Slack Trigger nie niesie tożsamości rozmowy i klucz sesji trzeba ustawić ręcznie. Regułę warto zapamiętać: klucz sesji definiujesz sam tylko wtedy, gdy trigger nie dostarcza własnego.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "name": "company_documents_tool",
+        "description": "Wewnętrzne dokumenty firmowe: polityki HR, regulaminy, procedury, świadczenia, urlopy. Użyj do każdego pytania pracownika o zasady i procedury obowiązujące w firmie."
+      },
+      "id": "2e668d23-9eb6-458a-abc0-404dd0068aef",
+      "name": "Vector Store Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
+      "typeVersion": 1,
+      "position": [
+        832,
+        1072
+      ],
+      "notes": "Narzędzie agenta opakowujące wyszukiwanie w bazie wektorowej pod nazwą company_documents_tool. Gdy agent uzna, że potrzebuje wiedzy z dokumentów, woła ten tool, który odpytuje Pinecone i streszcza trafienia własnym modelem językowym. Ma dwa sub-węzły: stronę odczytu Pinecone (ai_vectorStore) i osobny model LLM (ai_languageModel). Pole description precyzuje, co jest w korpusie (polityki HR, urlopy, świadczenia, procedury) — to właśnie ono steruje decyzją agenta, czy w ogóle sięgnąć po narzędzie. Domyślnie zwraca do czterech najbliższych fragmentów (topK). To pomost między agentem a wiedzą firmową zapisaną w Pinecone.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {}
+      },
+      "id": "175c7f24-795a-4117-a1e2-45e2327988be",
+      "name": "Google Gemini Chat Model (retrieval)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1248
+      ],
+      "notes": "Osobny model językowy pracujący wewnątrz Vector Store Tool, niezależny od modelu agenta. Streszcza i przetwarza fragmenty zwrócone z Pinecone, zanim trafią z powrotem do agenta jako odpowiedź narzędzia. Dlatego Tool ma własny LLM — oddziela redakcję wyników wyszukiwania od głównego rozumowania agenta. Używa modelu gemini-2.5-flash, tego samego co model agenta. Oba chat modele zmieniaj razem, żeby zachować spójność zachowania.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "pineconeIndex": {
+          "__rl": true,
+          "mode": "list",
+          "value": "company-files",
+          "cachedResultName": "company-files"
+        },
+        "options": {}
+      },
+      "id": "c57d3f8c-b3bc-4084-a041-4e66c9a90455",
+      "name": "Pinecone Vector Store (Retrieval)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        720,
+        1248
+      ],
+      "notes": "Strona odczytu RAG — w trybie query czyta z tej samej bazy Pinecone, do której pisze ingestia. Zwraca fragmenty najbliższe znaczeniowo pytaniu użytkownika. Podłączony do Vector Store Tool portem ai_vectorStore. Wektor pytania liczy podpięty węzeł embeddingów, tym samym modelem co strona zapisu. Musi wskazywać ten sam indeks Pinecone co węzeł insertu, inaczej czytałby z pustej lub niewłaściwej bazy. To zamyka pętlę RAG: zapis w ingestii, odczyt w chacie, wspólna baza.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "modelName": "models/text-embedding-004"
+      },
+      "id": "84f80180-6d0c-45a3-ac5b-9459e7d3b6bd",
+      "name": "Embeddings Google Gemini (retrieval)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1408
+      ],
+      "notes": "Liczy wektor pytania użytkownika modelem text-embedding-004, tym samym co strona ingestii. Tylko przy identycznym modelu wektor pytania jest porównywalny z wektorami zapisanymi w bazie. Podłączony do węzła Pinecone (Retrieval) portem ai_embedding. Zgodność modelu po obu stronach jest krytyczna — cichy rozjazd wersji psuje trafność retrievalu. To lustrzane odbicie węzła embeddingów z toru ingestii.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "content": "## Dodawanie dokumentów do bazy wektorowej przy tworzeniu lub zmianie plików w Google Drive",
+        "width": 320
+      },
+      "id": "cb2d92e6-3e66-4da6-a46a-db39235dc5cd",
+      "name": "Sticky Note fbf25c4d",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Kroki konfiguracji\n\n1. Projekt Google Cloud i Vertex AI API:\n* Utwórz projekt w Google Cloud.\n* Włącz Vertex AI API dla projektu.\n2. Klucz Google AI API:\n* Pobierz klucz Google AI API z Google AI Studio.\n3. Konto Pinecone:\n* Załóż darmowe konto na stronie Pinecone.\n* Pobierz klucz API z panelu Pinecone.\n* Utwórz index o nazwie company-files w projekcie Pinecone.\n4. Google Drive:\n* Utwórz dedykowany folder w Google Drive na dokumenty firmowe.\n5. Credentiale w n8n — skonfiguruj poświadczenia dla:\n* Google Drive OAuth2\n* Google Gemini(PaLM) Api (użyj klucza Google AI API)\n* Pinecone API (użyj klucza Pinecone)\n6. Import workflow:\n* Zaimportuj ten workflow do swojej instancji n8n.\n7. Konfiguracja workflow:\n* Ustaw oba węzły Google Drive Trigger na obserwowanie utworzonego folderu.\n* Ustaw węzły Pinecone Vector Store na index company-files.",
+        "height": 816,
+        "width": 420
+      },
+      "id": "b8c9c8f9-64df-4620-afe5-0abfcc371d82",
+      "name": "Sticky Note 1ff3a947",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Czat z dokumentami firmowymi"
+      },
+      "id": "a0fc117b-0ea7-4b08-9ae1-270f1ebd4849",
+      "name": "Sticky Note 5fe4de7f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        432,
+        672
+      ]
+    }
+  ],
+  "connections": {
+    "Google Drive File Created": {
+      "main": [
+        [
+          {
+            "node": "Download File From Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File From Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive File Updated": {
+      "main": [
+        [
+          {
+            "node": "Download File From Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vector Store Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model (retrieval)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Vector Store Tool",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store (Retrieval)": {
+      "ai_vectorStore": [
+        [
+          {
+            "node": "Vector Store Tool",
+            "type": "ai_vectorStore",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini (retrieval)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store (Retrieval)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "52fe7753-845a-46fa-913c-9ca947a4a165",
+  "activeVersionId": null,
+  "versionCounter": 12,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-06-29T14:06:12.927Z",
+      "createdAt": "2026-06-29T14:06:12.927Z",
+      "role": "workflow:owner",
+      "workflowId": "19Fh3m5vASsZFfMK",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}

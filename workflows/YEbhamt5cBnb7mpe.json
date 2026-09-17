@@ -1,0 +1,616 @@
+{
+  "updatedAt": "2026-09-01T13:24:08.697Z",
+  "createdAt": "2026-07-07T06:47:15.706Z",
+  "id": "YEbhamt5cBnb7mpe",
+  "name": "006 — Generowanie i wzbogacanie leadów B2B z Google Maps (SDR → Google Sheets)",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "id": "e35a6669-bc13-4094-8d7d-7ed1fc3792fe",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [
+        96,
+        -336
+      ],
+      "typeVersion": 1,
+      "notesInFlow": false,
+      "notes": "ROLA: Rozbija listę wyników wyszukiwania na pojedyncze elementy — jeden element na firmę. Konieczne, by móc odpytać o szczegóły każdej firmy osobno.\n\nMECHANIZM: pole fieldToSplitOut = results (tablica firm z odpowiedzi Google Text Search). Opcja include = allOtherFields zachowuje pozostałe pola obok każdej rozbitej pozycji. Z jednego elementu zawierającego tablicę N firm robi N osobnych elementów.\n\nWEJŚCIE: odpowiedź Text Search z tablicą results (z Google Maps Text Search).\nWYJŚCIE: N pojedynczych firm → do Fetch Place Details (uruchamiany raz na firmę).\n\nDLACZEGO: węzeł pobierający szczegóły potrzebuje jednego place_id na wywołanie. Text Search zwraca wszystkie firmy w jednym elemencie, więc trzeba go „rozpakować\". Klasyczny wzorzec n8n: rozbij kolekcję → przetwórz element po elemencie → scal z powrotem (tu: Merge + Aggregate)."
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "include": "specifiedFields",
+        "options": {}
+      },
+      "id": "c61ec1f0-288e-4f57-8ea2-bb5ca9fd18a9",
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [
+        768,
+        -416
+      ],
+      "typeVersion": 1,
+      "notesInFlow": false,
+      "notes": "ROLA: Zbiera wszystkie pojedyncze elementy z powrotem w jeden zbiorczy element z tablicą danych. Odwraca to, co zrobił Split Out.\n\nMECHANIZM: tryb aggregateAllItemData — pakuje wszystkie elementy wejściowe do jednego pola data (tablica). Dzięki temu następny węzeł widzi cały zbiór firm naraz, a nie po jednej.\n\nWEJŚCIE: połączony strumień firm (z Merge Original & Details).\nWYJŚCIE: jeden element { data: [ ...wszystkie firmy... ] } → do Data Cleaning Logic jako $json.data.\n\nDLACZEGO: węzeł Code musi mieć wszystkie firmy jednocześnie, żeby zbudować mapę deduplikacji i dopasować szczegóły do wyników bazowych. Operacja na całym zbiorze wymaga jednego elementu zbiorczego, nie strumienia pojedynczych. To most między przetwarzaniem element-po-elemencie a logiką globalną."
+    },
+    {
+      "parameters": {
+        "formTitle": "SDR",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Rodzaj działalności"
+            },
+            {
+              "fieldLabel": "Miasto"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "78b79be3-6be6-4dbf-aeb0-b6b47331db5d",
+      "name": "Forms Trigger",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [
+        -576,
+        -416
+      ],
+      "webhookId": "452b0ffe-177f-4459-8e79-86472ddcd8c7",
+      "typeVersion": 2.3,
+      "notesInFlow": false,
+      "notes": "ROLA: Punkt wejścia workflow — formularz n8n, który uruchamia cały pipeline generowania leadów po wysłaniu. Dopóki nikt nie wyśle formularza, workflow śpi.\n\nCO GO WYWOŁUJE: człowiek (np. przedstawiciel handlowy / SDR) otwierający URL formularza w przeglądarce i wypełniający dwa pola. To wzorzec self-service — zamiast ręcznie uruchamiać workflow w edytorze, użytkownik dostaje prosty formularz.\n\nPOLA FORMULARZA (formTitle „SDR\"): „Rodzaj działalności\" (kategoria firm do wyszukania, np. restauracja, kancelaria, warsztat) oraz „Miasto\" (lokalizacja). Etykiety przetłumaczone z portugalskiego oryginału (Tipo de Negócio, Cidade).\n\nMECHANIZM (kluczowy szczegół): wartości wpisane w pola stają się kluczami w danych wyjściowych węzła — dokładnie pod nazwą etykiety. Czyli po wysłaniu na wyjściu jest obiekt { „Rodzaj działalności\": „...\", „Miasto\": „...\" }. Dlatego następny węzeł (Format Search Query) odwołuje się do nich przez $json[„Rodzaj działalności\"] i $json[„Miasto\"]. Zmiana etykiety = konieczność poprawy tych referencji.\n\nDOSTĘP: n8n udostępnia Test URL (działa przy otwartym edytorze, do prób) oraz Production URL (po aktywacji workflow). Do realnego użycia przez zespół — Production URL.\n\nWYJŚCIE: obiekt z dwoma polami formularza → do Format Search Query.\n\nPUŁAPKA: formularz nie ma uwierzytelnienia — każdy z linkiem może go wysłać i wygenerować (płatne) zapytania do Google. W produkcji rozważ zabezpieczenie dostępu."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8a6cac17-a468-4d0f-bc8d-c14c6094a983",
+              "name": "tipoDeNegocio",
+              "type": "string",
+              "value": "={{ $json[\"Rodzaj działalności\"] }}"
+            },
+            {
+              "id": "8c5d94b6-c6b6-47c4-8e27-99affc159ade",
+              "name": "cidade",
+              "type": "string",
+              "value": "={{ $json[\"Miasto\"] }}"
+            },
+            {
+              "id": "09df1334-704f-41de-89e0-257e115903b8",
+              "name": "api_key",
+              "type": "string",
+              "value": "YOUR_API_KEY_HERE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3c7a4ff-5c82-45ee-92d7-46540b25b7c4",
+      "name": "Format Search Query",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -352,
+        -416
+      ],
+      "typeVersion": 3.4,
+      "alwaysOutputData": true,
+      "notesInFlow": false,
+      "notes": "ROLA: Węzeł Set (Edit Fields) normalizujący wejście z formularza do prostych zmiennych i ustawiający klucz API. Przygotowuje dane pod zapytania do Google Maps.\n\nMECHANIZM: tworzy trzy pola:\n- tipoDeNegocio = {{ $json[„Rodzaj działalności\"] }} — kategoria z formularza.\n- cidade = {{ $json[„Miasto\"] }} — miasto z formularza.\n- api_key = YOUR_API_KEY_HERE — PLACEHOLDER do podmiany na własny klucz Google Places API.\n\nNazwy zmiennych docelowych (tipoDeNegocio, cidade, api_key) zostają w oryginale, bo odwołują się do nich wyrażenia w obu węzłach HTTP (wyszukiwanie i szczegóły).\n\nWEJŚCIE: obiekt z pól formularza (z Forms Trigger).\nWYJŚCIE: obiekt { tipoDeNegocio, cidade, api_key } → do Google Maps Text Search.\n\nDLACZEGO TU: centralizuje klucz API — jest ustawiony w jednym miejscu i współdzielony przez oba zapytania do Google. Rozdziela też odbiór formularza od budowy zapytania.\n\nPUŁAPKA (bezpieczeństwo): klucz API jest tu wpisany jako zwykła wartość pola, NIE jako credential n8n. Oznacza to, że widnieje w definicji workflow (eksport, backup, kopia). Bezpieczniej przenieść go do credentiala httpQueryAuth albo zmiennej środowiskowej — szablon idzie na skróty."
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/textsearch/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.tipoDeNegocio }} w {{ $json.cidade }}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $('Format Search Query').item.json.api_key }}"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "name": "pagetoken",
+                    "value": "={{ $response.body.next_page_token }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ !$response.body.next_page_token }}",
+              "requestInterval": 5000
+            }
+          }
+        }
+      },
+      "id": "9bc4171b-fe83-40cc-9de1-4d3772d8b7ce",
+      "name": "Google Maps Text Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -128,
+        -416
+      ],
+      "notesInFlow": false,
+      "typeVersion": 4.3,
+      "notes": "ROLA: Najważniejszy węzeł pozyskiwania danych — odpytuje Google Places API (Text Search) o firmy pasujące do kryteriów z formularza. To on generuje surową listę leadów.\n\nMECHANIZM: HTTP Request GET na https://maps.googleapis.com/maps/api/place/textsearch/json z parametrami query: query = „{{ tipoDeNegocio }} w {{ cidade }}\" (np. „restauracja w Kraków\") oraz key = api_key z Format Search Query.\n\nAUTO-PAGINACJA (kluczowa cecha): Google zwraca wyniki stronami po ~20 firm. W opcjach węzła włączona jest paginacja: dokłada parametr pagetoken = {{ $response.body.next_page_token }} i pobiera kolejne strony, DOPÓKI odpowiedź zawiera next_page_token. Warunek zakończenia: completeExpression = {{ !$response.body.next_page_token }} (koniec, gdy tokenu brak).\n\nINTERWAŁ 5000 ms: między żądaniami jest 5-sekundowa przerwa, bo Google potrzebuje chwili, zanim next_page_token stanie się aktywny — bez tej zwłoki kolejne żądanie zwróciłoby błąd INVALID_REQUEST.\n\nWEJŚCIE: { tipoDeNegocio, cidade, api_key }.\nWYJŚCIE (dwie równoległe drogi): (1) do Merge Original & Details jako dane bazowe (nazwa, adres, ocena, współrzędne), (2) do Split Out, żeby dla każdej firmy pobrać szczegóły kontaktowe.\n\nPUŁAPKA (koszt): Places API jest płatne po darmowym limicie. Paginacja mnoży koszt — szerokie zapytanie w dużym mieście to wiele stron Text Search, a potem osobne zapytanie o szczegóły na każdą firmę. Ustaw budżet i limity w Google Cloud. Bez paginacji workflow pobrałby tylko pierwszą stronę (do 20 firm)."
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "place_id",
+              "value": "={{ $json.results.place_id }}"
+            },
+            {
+              "name": "fields",
+              "value": "=name,formatted_phone_number,website"
+            },
+            {
+              "name": "key",
+              "value": "={{ $('Format Search Query').item.json.api_key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "931de6a9-1f41-4a41-942a-64681747bc2c",
+      "name": "Fetch Place Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        320,
+        -336
+      ],
+      "typeVersion": 4.3,
+      "notesInFlow": false,
+      "notes": "ROLA: Wzbogaca każdą firmę o dane kontaktowe — pobiera z Google Places (Details) telefon i stronę WWW, których Text Search nie zwraca.\n\nMECHANIZM: HTTP Request GET na https://maps.googleapis.com/maps/api/place/details/json z parametrami: place_id = {{ $json.results.place_id }} (identyfikator firmy z rozbitego wyniku), fields = name,formatted_phone_number,website (TYLKO te trzy pola — ograniczenie pól obniża koszt i przyspiesza), key = api_key.\n\nWEJŚCIE: pojedyncza firma z place_id (z Split Out) — węzeł uruchamia się raz na każdą firmę.\nWYJŚCIE: szczegóły firmy (nazwa, telefon, strona) → do Merge Original & Details (wejście szczegółów).\n\nDLACZEGO OSOBNY WĘZEŁ: Text Search daje dane podstawowe (nazwa, adres, ocena), ale telefon i strona wymagają osobnego, płatnego zapytania Details per firma. Telefon z tego węzła jest później kryterium jakości leada.\n\nPUŁAPKA (koszt): to jedno zapytanie Details na KAŻDĄ znalezioną firmę — przy szerokim wyszukiwaniu mnoży koszt API najbardziej ze wszystkich węzłów."
+    },
+    {
+      "parameters": {},
+      "id": "c4cb172b-e4c2-4944-bbb1-dd6f1a3a7009",
+      "name": "Merge Original & Details",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        544,
+        -416
+      ],
+      "typeVersion": 3.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Łączy z powrotem dwa strumienie danych rozdzielone po Text Search: dane bazowe firm i ich szczegóły kontaktowe.\n\nMECHANIZM: węzeł Merge z dwoma wejściami. Wejście 0 = wyniki bazowe prosto z Google Maps Text Search (nazwa, adres, ocena, współrzędne, godziny). Wejście 1 = szczegóły z Fetch Place Details (telefon, strona). Domyślny tryb zestawia elementy z obu wejść w jeden strumień.\n\nWEJŚCIE 0: Google Maps Text Search (dane bazowe).\nWEJŚCIE 1: Fetch Place Details (dane wzbogacone).\nWYJŚCIE: połączony strumień → do Aggregate.\n\nDLACZEGO: bez tego kroku dane bazowe i szczegóły zostałyby w oddzielnych gałęziach. Faktyczne dopasowanie „która firma ma który telefon\" robi dopiero węzeł Code (po znormalizowanej nazwie) — Merge tylko sprowadza oba strumienie do jednego miejsca."
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseRaw = $items('Google Maps Text Search') || [];\n\n// baza\nconst base = baseRaw\n  .map(i => i.json?.data || i.json)\n  .flat()\n  .flatMap(d => d.results || []);\n\n// funkcja normalizująca tekst\nconst normalizar = (str) =>\n  (str || '')\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '') // usuwa znaki diakrytyczne (akcenty)\n    .replace(/[^a-z0-9]/g, ''); // czyści wszystko poza literami i cyframi\n\n// tworzy mapę z kluczem złożonym (nazwa)\nconst detailsMap = {};\n\n($json.data || []).forEach(d => {\n  const r = d.result || {};\n  if (!r.name) return;\n\n  const chave = normalizar(r.name);\n\n  // zachowuje wpis, jeśli ma telefon lub stronę\n  if (!detailsMap[chave] || r.formatted_phone_number || r.website) {\n    detailsMap[chave] = r;\n  }\n});\n\n// scalenie\nconst resultado = base.map(item => {\n  const chave = normalizar(item.name);\n  const det = detailsMap[chave] || {};\n\n  return {\n    nome: item?.name,\n    tipo: item?.types?.[0],\n    endereco: item?.formatted_address,\n    latitude: item?.geometry?.location?.lat,\n    longitude: item?.geometry?.location?.lng,\n    aberto_agora: item?.opening_hours?.open_now ?? false,\n    status: item?.business_status,\n    avaliacao: item?.rating,\n    total_avaliacoes: item?.user_ratings_total,\n\n    telefone: det?.formatted_phone_number || null,\n    site: det?.website || null\n  };\n});\n\nreturn resultado.map(r => ({ json: r }));"
+      },
+      "id": "271e2365-e5c8-4822-9dd2-38250cba7be6",
+      "name": "Data Cleaning Logic",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        992,
+        -416
+      ],
+      "typeVersion": 2,
+      "notesInFlow": false,
+      "notes": "ROLA: Serce przetwarzania danych — węzeł Code (JavaScript). Robi trzy rzeczy: normalizuje teksty, deduplikuje firmy i buduje docelowy, czysty schemat leada.\n\nMECHANIZM krok po kroku:\n1. NORMALIZACJA — funkcja sprowadza nazwę do małych liter, usuwa znaki diakrytyczne (normalize NFD + regex na zakres \\u0300-\\u036f) i znaki specjalne. Efekt: „Café Żółć!\" → „cafezolc\". Odporna na drobne różnice zapisu przy porównaniu.\n2. DEDUPLIKACJA — buduje mapę firm z kluczem ze znormalizowanej nazwy. Przy kolizji zachowuje wpis, który ma telefon lub stronę (lepszy jakościowo).\n3. SCALANIE — dla każdej firmy bazowej dokłada telefon i stronę z mapy szczegółów i zwraca czysty obiekt.\n\nPOLA WYJŚCIOWE (nazwy portugalskie — zostają, bo odwołują się do nich węzeł If i mapowanie Google Sheets): nome (nazwa), tipo (kategoria), endereco (adres), latitude, longitude, aberto_agora (czy otwarte teraz), status (status działalności), avaliacao (ocena), total_avaliacoes (liczba ocen), telefone (telefon), site (strona).\n\nWEJŚCIE: $json.data — zagregowana tablica firm (z Aggregate). Bazę bierze dodatkowo przez $items('Google Maps Text Search').\nWYJŚCIE: lista czystych obiektów leadów → do Validate Lead Quality.\n\nPUŁAPKA (rozbieżność szablonu): opis szablonu i komentarz autora mówią o kluczu deduplikacji „nazwa + adres\", ale kod realnie używa SAMEJ znormalizowanej nazwy. Skutek: dwie różne firmy o tej samej nazwie w różnych lokalizacjach (sieciówki, franczyzy) zostaną potraktowane jak duplikat i jedna wypadnie. Przy wyszukiwaniu sieciówek dodaj adres do klucza. Komentarze w kodzie są po polsku, logika bez zmian względem oryginału."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c0e46eb5-5cf6-4d84-b513-38961334cc9c",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.telefone }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "51ccbb16-4105-4a2a-9dfa-a213c09527c5",
+      "name": "Validate Lead Quality",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1216,
+        -416
+      ],
+      "typeVersion": 2.2,
+      "notesInFlow": false,
+      "notes": "ROLA: Bramka jakości — przepuszcza dalej tylko leady, które mają numer telefonu. Odsiewa firmy bezużyteczne dla zespołu SDR (bez kontaktu telefonicznego).\n\nMECHANIZM: węzeł If z jednym warunkiem — pole telefone musi istnieć (operator „exists\", tryb ścisłej walidacji typów). Wyrażenie sprawdzane: {{ $json.telefone }}.\n\nWEJŚCIE: lista leadów z Data Cleaning Logic.\nWYJŚCIE: gałąź TRUE (telefon istnieje) → do Log Lead to Google Sheets.\n\nPUŁAPKA (kluczowe): gałąź FALSE nie jest nigdzie podłączona — firmy bez telefonu są po cichu porzucane, znikają bez śladu. Jeśli chcesz je zachować (np. wzbogacić z innego źródła albo mieć pełną listę), podłącz drugą gałąź do osobnego arkusza. Filtr jest prosty, ale skuteczny: lepiej mniej rekordów z kontaktem niż dużo pustych."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1jDB07Io7dyxGkBbvNbGfyLdpNSxSAx_uVKbdifTc9BA",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jDB07Io7dyxGkBbvNbGfyLdpNSxSAx_uVKbdifTc9BA/edit?usp=drivesdk",
+          "cachedResultName": "base"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": 228523750,
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1jDB07Io7dyxGkBbvNbGfyLdpNSxSAx_uVKbdifTc9BA/edit#gid=228523750",
+          "cachedResultName": "SRD"
+        },
+        "columns": {
+          "value": {
+            "name": "={{ $json.nome }}",
+            "site": "={{ $json.site }}",
+            "types": "={{ $json.tipo }}",
+            "rating": "={{ $json.avaliacao }}",
+            "business_status": "={{ $json.status }}",
+            "formatted_address": "={{ $json.endereco }}",
+            "location.lat / lng": "={{ $json.latitude }},{{ $json.longitude }}",
+            "user_ratings_total": "={{ $json.total_avaliacoes }}",
+            "formatted_phone_number": "={{ $json.telefone }}",
+            "opening_hours.open_now": "={{ $json.aberto_agora }}"
+          },
+          "schema": [
+            {
+              "id": "types",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "types",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "name",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "formatted_phone_number",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "required": false,
+              "displayName": "formatted_phone_number",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "formatted_address",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "formatted_address",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location.lat / lng",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "location.lat / lng",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "opening_hours.open_now",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "opening_hours.open_now",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_status",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "business_status",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "rating",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "rating",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_ratings_total",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "user_ratings_total",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "site",
+              "type": "string",
+              "display": true,
+              "removed": false,
+              "required": false,
+              "displayName": "site",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a9048e2a-a723-4716-8d37-2c4d9b825ef8",
+      "name": "Log Lead to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        1440,
+        -416
+      ],
+      "typeVersion": 4.7,
+      "notesInFlow": false,
+      "notes": "ROLA: Końcowy węzeł pipeline — zapisuje zwalidowane leady do arkusza Google Sheets. To miejsce, z którego zespół SDR pobiera gotową listę firm do kontaktu.\n\nMECHANIZM: operacja append (dopisywanie wierszy — nie nadpisuje istniejących). Mapuje pola z węzła Code na kolumny arkusza: nome→name, telefone→formatted_phone_number, site→website, endereco→formatted_address, tipo→types, avaliacao→rating, status→business_status, total_avaliacoes→user_ratings_total, latitude+longitude→„location.lat / lng\" (łączone w jedną kolumnę), aberto_agora→„opening_hours.open_now\".\n\nWEJŚCIE: leady z telefonem (gałąź TRUE węzła Validate Lead Quality).\nWYJŚCIE: brak — koniec przepływu. Efekt jest w arkuszu.\n\nKONFIGURACJA: wymaga credentiala Google Sheets OAuth2. documentId wskazuje na arkusz autora szablonu („base\"/„SRD\") — PODMIEŃ na własny. Nagłówki kolumn w Twoim arkuszu muszą pasować do nazw powyżej (name, formatted_phone_number, website, formatted_address, types, rating, business_status, user_ratings_total, „location.lat / lng\", „opening_hours.open_now\").\n\nEFEKT NARASTAJĄCY: każde wysłanie formularza dopisuje nowe firmy pod istniejącymi, budując rosnącą bazę leadów."
+    },
+    {
+      "parameters": {
+        "content": "## TRIGGER I PRZYGOTOWANIE WEJŚCIA",
+        "height": 320,
+        "width": 352,
+        "color": 5
+      },
+      "id": "dd11a58f-f69a-4cfe-8114-7d23c3107daa",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -592,
+        -576
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## WZBOGACANIE Z GOOGLE MAPS",
+        "height": 400,
+        "width": 496
+      },
+      "id": "fb0b7f70-8788-408a-bf16-065ec5ca3755",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -96,
+        -576
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## PRZETWARZANIE DANYCH I LOGIKA",
+        "height": 256,
+        "width": 512
+      },
+      "id": "b3374948-b2a2-43e2-ae93-1b85aa181ae5",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        560,
+        -512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## WALIDACJA I ZAPIS",
+        "height": 256,
+        "width": 464,
+        "color": 4
+      },
+      "id": "cd48214e-31f9-4999-9f83-5e711a2c2460",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1152,
+        -512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "# Pipeline leadów SDR z Google Maps\n\n###  Cel\nTen workflow to wydajny **silnik generowania leadów B2B** zbudowany dla zespołów SDR. Automatyzuje wyszukiwanie, wzbogacanie i walidację potencjalnych klientów z **Google Maps** na podstawie własnych kryteriów (Kategoria + Miasto) i zapisuje je w ustrukturyzowanej bazie do dalszego kontaktu.\n\n---\n\n###  Jak to działa\n\n* **Trigger i przygotowanie**: Start przez **formularz n8n**. Węzeł `Set` czyści wejście i przygotowuje zmienne środowiskowe.\n* **Wyszukiwanie i wzbogacanie**: Wykorzystuje **Google Maps Text Search** z zoptymalizowaną **auto-paginacją** (pobiera wyniki, dopóki istnieje `next_page_token`).\n* **Pobranie szczegółów**: Węzeł `Split Out` rozbija listę na pojedyncze elementy, żeby uruchomić **Fetch Place Details** i pozyskać cenne dane jak `phone_number` i `website`.\n* **Inteligencja danych**: Własny węzeł **JavaScript Code** normalizuje teksty, usuwa duplikaty na podstawie znormalizowanej nazwy i przygotowuje schemat JSON.\n* **Bramka jakości**: Węzeł `If` przepuszcza do arkusza tylko leady z **poprawnym numerem telefonu**.\n\n---\n\n###  Stos technologiczny\n* **Źródło**: Google Places API (Text Search i Details).\n* **Silnik**: automatyzacja n8n.\n* **Zapis**: Google Sheets.\n\n---",
+        "height": 1008,
+        "width": 432
+      },
+      "id": "53cf972c-96b8-4a2a-8608-e0f8ce32af00",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1072,
+        -816
+      ],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Data Cleaning Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Fetch Place Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forms Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Cleaning Logic": {
+      "main": [
+        [
+          {
+            "node": "Validate Lead Quality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Place Details": {
+      "main": [
+        [
+          {
+            "node": "Merge Original & Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Search Query": {
+      "main": [
+        [
+          {
+            "node": "Google Maps Text Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Lead Quality": {
+      "main": [
+        [
+          {
+            "node": "Log Lead to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Maps Text Search": {
+      "main": [
+        [
+          {
+            "node": "Merge Original & Details",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Original & Details": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "55916563-ce83-43a6-8c3e-2624405faf29",
+  "activeVersionId": null,
+  "versionCounter": 8,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-07-07T06:47:15.711Z",
+      "createdAt": "2026-07-07T06:47:15.711Z",
+      "role": "workflow:owner",
+      "workflowId": "YEbhamt5cBnb7mpe",
+      "projectId": "RYCUSsSEsnZsTltP",
+      "project": {
+        "updatedAt": "2026-06-24T12:19:26.627Z",
+        "createdAt": "2026-06-24T12:17:53.257Z",
+        "id": "RYCUSsSEsnZsTltP",
+        "name": "Krzysztof Strand <codecollabsql@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "67a20cdd-a499-4cf8-a9fc-2b1f03e73b50"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
+  }
+}
