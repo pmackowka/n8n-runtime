@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Czym jest to repo
 
-Scaffold Docker Compose dla lokalnej instancji **n8n** — to nie jest kodowa aplikacja. Nie ma tu build/lint/testów; jedynym "kodem" są `docker-compose.yml` i `.env`. Instancja to pojedynczy kontener n8n z wbudowaną bazą SQLite (bez Postgresa, bez trybu queue/workerów) — cały stan (workflow, credentiale, ustawienia) siedzi w wolumenie `n8n_data`. Same workflow (nody, połączenia, credentiale) żyją wewnątrz działającej instancji, nie jako pliki w tym repo — edytuj je na żywo przez narzędzia `mcp__n8n-mcp__*` (serwer MCP n8n-mcp), nie ręcznie w plikach tutaj.
+Scaffold Docker Compose dla lokalnej instancji **n8n** — to nie jest kodowa aplikacja. Nie ma tu build/lint/testów. Instancja to pojedynczy kontener n8n z wbudowaną bazą SQLite (bez Postgresa, bez trybu queue/workerów) — cały stan (workflow, credentiale, ustawienia, historia wykonań) siedzi w wolumenie `n8n_data`. Workflow edytuje się na żywo przez narzędzia `mcp__n8n-mcp__*` (serwer MCP n8n-mcp) przeciwko działającej instancji, nie ręcznie w plikach tutaj.
+
+Definicje workflow (sam JSON logiki — nody, połączenia, bez credentiali) mają dodatkowo osobną, ręcznie odświeżaną kopię w `workflows/` w tym repo — to warstwa git-diff/historii zmian (`scripts/export-workflows.sh` eksportuje z kontenera, `scripts/import-workflows.sh` importuje z powrotem), odświeżana ręcznie po sesji edycji w n8n, nie źródło prawdy i nie sposób edycji na co dzień. Jedynym źródłem prawdy do disaster recovery pozostaje pełny backup wolumenu `n8n_data` (+ klucz szyfrujący z `.env`) na Google Drive — pełny opis warstwy git w `README.md`, sekcja "Workflow-as-code".
 
 Ten sam katalog roboczy służy też do nauki agentów głosowych ElevenLabs (przez serwer MCP `elevenlabs`) w ramach osobnego kursu — analogicznie do n8n, cały stan (agenci, workflow, knowledge base) żyje w usłudze zewnętrznej, nie jako pliki tutaj.
 
