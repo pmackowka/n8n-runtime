@@ -2,6 +2,19 @@
 
 Krótka ściąga do codziennej obsługi. Pełny opis instalacji, zmiennych środowiskowych, backupu i migracji na nowy Mac: `Knowledge-Base/wiki/Software/n8n/n8n-001-Instalacja-Lokalnie-Docker-Compose-Mac.md` (osobne repo, ten sam Mac).
 
+## Architektura repo
+
+| Ścieżka | Rola |
+|---|---|
+| `docker-compose.yml` | definicja usługi n8n (kontener, port, wolumen `n8n_data`) |
+| `.env` | sekrety (m.in. klucz szyfrujący, `WEBHOOK_URL`) — gitignorowany |
+| `workflows/*.json` | wyeksportowane definicje workflow, jeden plik na workflow (nazwa = ID n8n), bez credentiali — patrz sekcja niżej |
+| `scripts/export-workflows.sh` | eksport wszystkich workflow z kontenera do `workflows/` |
+| `scripts/import-workflows.sh` | import workflow z `workflows/` do kontenera |
+| `.claude/skills/n8n/` | skill Claude Code — dokumentuje workflow w samej instancji n8n (`/n8n`) |
+| `.claude/skills/11labs/` | skill Claude Code — kolejne zadania kursu ElevenLabs (`/11labs`) |
+| `CLAUDE.md` | instrukcje repo dla Claude Code |
+
 ## Uruchamianie
 
 | Akcja | Komenda |
