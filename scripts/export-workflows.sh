@@ -27,5 +27,22 @@ mkdir -p "$OUT_DIR"
 docker cp "$CONTAINER:$TMP_DIR/." "$OUT_DIR/"
 docker exec "$CONTAINER" rm -rf "$TMP_DIR"
 
+# Sanityzacja: n8n wpisuje w każdy plik prawdziwy email właściciela projektu
+# (pole shared[].project.name) — zamieniamy go na placeholder, żeby eksport
+# był bezpieczny do publikacji/publicznego repo bez ręcznej redakcji.
+OWNER_PATTERN='Krzysztof Strand <codecollabsql@gmail.com>'
+if grep -rl "$OWNER_PATTERN" "$OUT_DIR"/*.json >/dev/null 2>&1; then
+  sed -i '' "s/$OWNER_PATTERN/Personal <redacted@example.com>/g" "$OUT_DIR"/*.json
+fi
+
 COUNT=$(find "$OUT_DIR" -maxdepth 1 -name '*.json' | wc -l | tr -d ' ')
 echo "Wyeksportowano $COUNT workflow do $OUT_DIR/"
+
+# Ostrzeżenie (nie blokuje): inne kategorie danych, których nie da się bezpiecznie
+# zautomatyzować (dowolne przyszłe typy zasobów) — sprawdź ręcznie przed commitem/publikacją.
+HITS=$(grep -lE 'docs\.google\.com/spreadsheets|drive\.google\.com/drive/folders|airtable\.com/app[A-Za-z0-9]+' "$OUT_DIR"/*.json 2>/dev/null || true)
+if [ -n "$HITS" ]; then
+  echo "UWAGA: znaleziono zahardkodowane linki do realnych zasobów Google/Airtable w:" >&2
+  echo "$HITS" >&2
+  echo "Sprawdź ręcznie przed commitem, czy to bezpieczne do publikacji (patrz CLAUDE.md)." >&2
+fi
